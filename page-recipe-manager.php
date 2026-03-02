@@ -194,6 +194,11 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                                  user_can_manage_collection(get_current_user_id(), $original->post_author);
                     
                     if ($original && $can_share) {
+                        // Auto-promote subscriber to author if needed (Editors already have publish rights)
+                        $recipient = get_userdata($recipient_id);
+                        if ($recipient && in_array('subscriber', $recipient->roles)) {
+                            $recipient->set_role('author');
+                        }
                         // Check if recipient already has a recipe with this title
                         global $wpdb;
                         $existing = $wpdb->get_var($wpdb->prepare(
@@ -1046,13 +1051,19 @@ function openShareDialog() {
     // Get all authors (potential recipients)
     require_once(get_stylesheet_directory() . '/collection-permissions.php');
     $current_user_id = get_current_user_id();
-    $authors = get_users(array('role' => 'author'));
+    $potential_recipients = get_users(array('role__in' => array('author', 'editor', 'subscriber')));
     $recipient_list = array();
-    foreach ($authors as $author) {
-        if ($author->ID != $current_user_id) {
+    foreach ($potential_recipients as $user) {
+        if ($user->ID != $current_user_id) {
+            // Show role indicator
+            if (in_array('author', $user->roles) || in_array('editor', $user->roles)) {
+                $role_label = ''; // Already has collection rights
+            } else {
+                $role_label = ' (will become author)'; // Subscriber will be promoted
+            }
             $recipient_list[] = array(
-                'id' => $author->ID,
-                'name' => $author->display_name
+                'id' => $user->ID,
+                'name' => $user->display_name . $role_label
             );
         }
     }
