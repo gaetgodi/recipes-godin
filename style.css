@@ -1,0 +1,404 @@
+/*
+ Theme Name:   Divi Recipe Child
+ Theme URI:    https://recipes.godin.com
+ Description:  Child theme for Recipe Management System based on Divi
+ Author:       Gaetan Godin
+ Author URI:   https://godin.com
+ Template:     Divi
+ Version:      1.0.0
+ License:      GNU General Public License v2 or later
+ License URI:  http://www.gnu.org/licenses/gpl-2.0.html
+ Text Domain:  divi-recipe-child
+*/
+
+/* ==========================================================================
+   Child Theme Styles
+   ========================================================================== */
+
+/* Import parent theme styles (handled by functions.php) */
+
+/* ==========================================================================
+   Custom Recipe Styles
+   ========================================================================== */
+
+/* Recipe Cards */
+.recipe-card {
+    background: #fff;
+    border: 2px solid #c84a31;
+    padding: 20px;
+    margin-bottom: 20px;
+    transition: transform 0.2s;
+}
+
+.recipe-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.recipe-card-title {
+    color: #c84a31;
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.recipe-card-category {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+/* Recipe Meta */
+.recipe-meta {
+    background: #f9f9f9;
+    padding: 15px;
+    border-left: 4px solid #c84a31;
+    margin-bottom: 20px;
+}
+
+/* Recipe Sections */
+.recipe-section {
+    margin-bottom: 30px;
+}
+
+.recipe-section h2 {
+    color: #c84a31;
+    font-size: 24px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #c84a31;
+}
+
+/* Recipe Table */
+.recipe-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+}
+
+.recipe-table th {
+    background: #c84a31;
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: bold;
+}
+
+.recipe-table td {
+    padding: 12px;
+    border: 1px solid #ddd;
+    vertical-align: top;
+}
+
+.recipe-table tr:nth-child(even) {
+    background: #f9f9f9;
+}
+
+.recipe-table tr:hover {
+    background: #f0f0f0;
+}
+
+/* Category Filter */
+.recipe-category-filter {
+    background: #f9f9f9;
+    padding: 20px;
+    border: 2px solid #c84a31;
+    margin-bottom: 30px;
+}
+
+.recipe-category-filter h3 {
+    color: #c84a31;
+    margin-top: 0;
+}
+
+.recipe-category-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+}
+
+.recipe-category-list li {
+    margin: 0;
+}
+
+.recipe-category-list a {
+    display: block;
+    padding: 10px;
+    background: white;
+    border: 1px solid #ddd;
+    color: #333;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.recipe-category-list a:hover {
+    background: #c84a31;
+    color: white;
+    border-color: #c84a31;
+}
+
+/* Search Box */
+.recipe-search-box {
+    background: #fff;
+    padding: 20px;
+    border: 2px solid #c84a31;
+    margin-bottom: 30px;
+}
+
+.recipe-search-box h3 {
+    color: #c84a31;
+    margin-top: 0;
+}
+
+.recipe-search-box input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    font-size: 16px;
+}
+
+.recipe-search-box button {
+    background: #c84a31;
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    font-size: 16px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.recipe-search-box button:hover {
+    background: #a63820;
+}
+
+/* Print Styles */
+@media print {
+    .et_pb_section,
+    .recipe-no-print {
+        display: none !important;
+    }
+    
+    .recipe-print-only {
+        display: block !important;
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .recipe-category-list {
+        grid-template-columns: 1fr;
+    }
+    
+    .recipe-table {
+        font-size: 14px;
+    }
+    
+    .recipe-table th,
+    .recipe-table td {
+        padding: 8px;
+    }
+}
+
+/* Custom Header Styling */
+.recipe-site-header {
+    text-align: center;
+    padding: 30px 20px;
+    background: white;
+    border-bottom: 3px solid #c84a31;
+}
+
+.recipe-site-header h1 {
+    font-family: 'Brush Script MT', cursive, Arial, sans-serif;
+    color: #c84a31;
+    font-size: 48px;
+    margin: 0;
+}
+
+/* Navigation Tabs */
+.recipe-nav-tabs {
+    display: flex;
+    background: #c84a31;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.recipe-nav-tabs li {
+    flex: 1;
+    margin: 0;
+}
+
+.recipe-nav-tabs a {
+    display: block;
+    padding: 15px;
+    text-align: center;
+    color: white !important;
+    text-decoration: none;
+    font-weight: bold;
+    border-right: 1px solid #a63820;
+    transition: background 0.2s;
+}
+
+.recipe-nav-tabs li:last-child a {
+    border-right: none;
+}
+
+.recipe-nav-tabs a:hover {
+    background: #a63820;
+}
+
+.recipe-nav-tabs a.active {
+    background: #8b2e18;
+}
+
+/* Book Generator Styles */
+.recipe-book-generator {
+    background: white;
+    padding: 20px;
+}
+
+.recipe-selection-item {
+    padding: 10px;
+    border: 1px solid #ddd;
+    margin-bottom: 5px;
+    background: #fafafa;
+}
+
+.recipe-selection-item:hover {
+    background: #f0f0f0;
+}
+
+.recipe-selection-item input[type="checkbox"] {
+    margin-right: 10px;
+    width: 18px;
+    height: 18px;
+}
+
+.recipe-category-section {
+    margin-bottom: 30px;
+}
+
+.recipe-category-header {
+    background: #f0f0f0;
+    padding: 15px;
+    border-left: 4px solid #c84a31;
+    margin-bottom: 15px;
+}
+
+.recipe-category-header h3 {
+    margin: 0;
+    color: #c84a31;
+}
+
+/* Buttons */
+.recipe-btn {
+    display: inline-block;
+    padding: 12px 24px;
+    background: #c84a31;
+    color: white !important;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.2s;
+}
+
+.recipe-btn:hover {
+    background: #a63820;
+}
+
+.recipe-btn-secondary {
+    background: #666;
+}
+
+.recipe-btn-secondary:hover {
+    background: #444;
+}
+
+/* Login Page Styles */
+.recipe-login-container {
+    max-width: 400px;
+    margin: 50px auto;
+    background: white;
+    border: 2px solid #c84a31;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.recipe-login-header {
+    background: linear-gradient(to bottom, #ff8c42, #c84a31);
+    color: white;
+    padding: 20px;
+    text-align: center;
+}
+
+.recipe-login-body {
+    padding: 30px;
+}
+
+.recipe-login-form input[type="text"],
+.recipe-login-form input[type="password"] {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+}
+
+.recipe-login-form button {
+    width: 100%;
+    padding: 12px;
+    background: #c84a31;
+    color: white;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.recipe-login-form button:hover {
+    background: #a63820;
+}
+/* ==========================================================================
+   Recipe List Styling (for single recipe view)
+   ========================================================================== */
+
+.recipe-content ul {
+    list-style-type: disc;
+    margin-left: 30px;
+    margin-bottom: 15px;
+}
+
+.recipe-content ul li {
+    margin-bottom: 8px;
+    line-height: 1.6;
+}
+
+.recipe-content ol {
+    list-style-type: decimal;
+    margin-left: 30px;
+    margin-bottom: 15px;
+}
+
+.recipe-content ol li {
+    margin-bottom: 8px;
+    line-height: 1.6;
+}
+
+/* Print Template List Styling */
+.recipe-section ul {
+    list-style-type: disc;
+    margin-left: 20px;
+}
+
+.recipe-section ol {
+    list-style-type: decimal;
+    margin-left: 20px;
+}
+
+.recipe-section li {
+    margin-bottom: 2px;
+    font-size: 8pt;
+    display: list-item;
+}
