@@ -43,19 +43,26 @@ function updateSelectedCount() {
 
 function toggleSelectAll() {
     const selectAll = document.getElementById('selectAll');
-    const checkboxes = document.querySelectorAll('.recipe-checkbox');
+    const allRows = document.querySelectorAll('.recipe-manager-table tbody tr');
     
-    checkboxes.forEach(cb => {
-        // Only toggle checkboxes in visible rows
-        const row = cb.closest('tr');
-        if (row && row.style.display !== 'none') {
-            cb.checked = selectAll.checked;
+    allRows.forEach(row => {
+        // Skip if row is hidden
+        if (row.style.display === 'none') {
+            // Uncheck hidden rows
+            const checkbox = row.querySelector('.recipe-checkbox');
+            if (checkbox) checkbox.checked = false;
+            return;
+        }
+        
+        // Toggle visible rows
+        const checkbox = row.querySelector('.recipe-checkbox');
+        if (checkbox) {
+            checkbox.checked = selectAll.checked;
         }
     });
     
     updateSelectedCount();
 }
-
 // Multi-category filter functions
 function toggleCategoryDropdown() {
     const dropdown = document.getElementById('categoryDropdown');
