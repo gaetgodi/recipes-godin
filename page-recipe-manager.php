@@ -418,6 +418,27 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
             Selected: <span class="selected-count" id="selectedCount">0</span>
         </div>
         
+        <!-- Search Box -->
+        <div style="margin: 15px 0; padding: 15px; background: #fff; border: 2px solid #c84a31; border-radius: 6px; display: flex; align-items: center; gap: 10px;">
+            <label style="font-weight: 600; font-size: 15px;">🔍 Search Recipes:</label>
+            <input 
+                type="text" 
+                id="recipeSearch" 
+                placeholder="Type to search recipe titles..." 
+                oninput="searchRecipes()"
+                style="flex: 1; padding: 10px 15px; font-size: 15px; border: 2px solid #ddd; border-radius: 4px;"
+            >
+            <button 
+                type="button" 
+                onclick="clearSearch()" 
+                class="action-btn" 
+                style="background: #6c757d; color: white;">
+                Clear
+            </button>
+        </div>
+        
+        <!-- Bulk Actions - Top -->
+        
         <!-- Bulk Actions - Top -->
         <div class="bulk-actions" style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 6px;">
             <label><strong>With Selected:</strong></label>
