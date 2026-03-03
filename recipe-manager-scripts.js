@@ -63,6 +63,7 @@ function toggleSelectAll() {
     
     updateSelectedCount();
 }
+
 // Multi-category filter functions
 function toggleCategoryDropdown() {
     const dropdown = document.getElementById('categoryDropdown');
@@ -178,19 +179,10 @@ function searchRecipes() {
     // Update the count display
     updateRecipeCount(visibleCount);
     updateSelectedCount();
-}
-
-// Clear search and show all recipes
-function clearSearch() {
-    const searchInput = document.getElementById('recipeSearch');
-    searchInput.value = '';
-    searchRecipes(); // This will show all recipes again
-}
-
-// Update recipe count display
-function updateRecipeCount(count) {
-    const countElement = document.querySelector('.recipe-count strong');
-    if (countElement) {
-        countElement.textContent = count;
+    
+    // Uncheck "Select All" when filtering changes
+    const selectAll = document.getElementById('selectAll');
+    if (selectAll) {
+        selectAll.checked = false;
     }
 }
