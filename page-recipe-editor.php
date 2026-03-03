@@ -2,8 +2,11 @@
 /**
  * Template Name: Recipe Editor
  * 
- * Frontend recipe add/edit interface for non-technical users
+ * Frontend recipe add/edit interface with featured image OCR
  */
+
+// Include the image upload handler
+require_once(get_stylesheet_directory() . '/recipe-image-upload-handler.php');
 
 // Handle AJAX delete request
 add_action('wp_ajax_delete_recipe', function() {
@@ -24,11 +27,11 @@ add_action('wp_ajax_delete_recipe', function() {
     // Can delete if: administrator, owner, or has editor permission
     $can_delete = false;
     if (current_user_can('administrator')) {
-        $can_delete = true; // Administrator
+        $can_delete = true;
     } elseif ($recipe_owner_id == $current_user_id) {
-        $can_delete = true; // Owner
+        $can_delete = true;
     } elseif (user_can_manage_collection($current_user_id, $recipe_owner_id)) {
-        $can_delete = true; // Co-editor
+        $can_delete = true;
     }
     
     if ($can_delete && current_user_can('edit_posts')) {
@@ -61,37 +64,31 @@ $is_editing = ($recipe_id > 0);
 // Build back URL with category filter if applicable
 $back_url = home_url('/recipe-manager/');
 
-// First priority: use the category filter we came from
 if (!empty($_GET['from_cat'])) {
     $back_url .= '?recipe_cat=' . intval($_GET['from_cat']);
 } elseif ($is_editing) {
-    // Second priority: if recipe has single category, use that
     $recipe_cats = get_recipe_categories($recipe_id);
     if (!empty($recipe_cats) && count($recipe_cats) === 1) {
         $back_url .= '?recipe_cat=' . $recipe_cats[0]->cat_id;
     }
-    // If multiple categories: just go to unfiltered view
 }
 
 // Load recipe data if editing
 if ($is_editing) {
     $recipe = get_post($recipe_id);
     
-    // Include permission functions
     require_once(get_stylesheet_directory() . '/collection-permissions.php');
     
-    // Verify user can edit this recipe (either owns it, has Editor permission, or is administrator)
     $recipe_owner_id = $recipe ? $recipe->post_author : 0;
     $can_edit = false;
     
     if ($recipe && $recipe->post_type === 'recipe') {
-        // Can edit if: administrator, owner, or has editor permission for this collection
         if (current_user_can('administrator')) {
-            $can_edit = true; // Administrator
+            $can_edit = true;
         } elseif ($recipe_owner_id == get_current_user_id()) {
-            $can_edit = true; // Owner
+            $can_edit = true;
         } elseif (user_can_manage_collection(get_current_user_id(), $recipe_owner_id)) {
-            $can_edit = true; // Co-editor
+            $can_edit = true;
         }
     }
     
@@ -110,34 +107,23 @@ if ($is_editing) {
     $recipe_method = get_post_meta($recipe_id, '_recipe_method', true);
     $recipe_notes = get_post_meta($recipe_id, '_recipe_notes', true);
     
-    // Function to convert HTML to plain text with line breaks preserved
     function html_to_plain_text($html, $is_method = false) {
         if (empty($html)) return '';
         
-        // Decode HTML entities - do it TWICE to handle double-escaping
         $html = html_entity_decode($html, ENT_QUOTES, 'UTF-8');
         $html = html_entity_decode($html, ENT_QUOTES, 'UTF-8');
         
-        // Replace block-level closing tags with double newline
         $html = preg_replace('/<\/(p|div|h[1-6])>/i', "\n\n", $html);
-        
-        // Replace list items and breaks with single newline
         $html = preg_replace('/<\/(li)>/i', "\n", $html);
         $html = preg_replace('/<br\s*\/?>/i', "\n", $html);
         
-        // Strip all remaining HTML tags
         $html = strip_tags($html);
         
-        // For method: split on periods to create line breaks at sentence endings
         if ($is_method) {
-            // Split on period, creating separate lines
             $html = str_replace('.', ".\n", $html);
-            
-            // Protection: Don't split decimals like "1.5" or "350.0"
             $html = preg_replace('/(\d)\.\n(\d)/', '$1.$2', $html);
         }
         
-        // Clean up: remove excessive whitespace but preserve intentional line breaks
         $lines = explode("\n", $html);
         $lines = array_map('trim', $lines);
         $lines = array_filter($lines, function($line) { return $line !== ''; });
@@ -145,19 +131,24 @@ if ($is_editing) {
         return implode("\n", $lines);
     }
     
-    // Convert HTML to plain text for editing
     $recipe_ingredients = html_to_plain_text($recipe_ingredients, false);
-    $recipe_method = html_to_plain_text($recipe_method, true);  // true = use period breaks
+    $recipe_method = html_to_plain_text($recipe_method, true);
     $recipe_notes = html_to_plain_text($recipe_notes, false);
     
     $recipe_categories_objs = get_recipe_categories($recipe_id);
-    $recipe_category = array_map(function($cat) { return $cat->cat_id; }, $recipe_categories_objs); // Array of cat IDs
+    $recipe_category = array_map(function($cat) { return $cat->cat_id; }, $recipe_categories_objs);
+    
+    // Get featured image if exists
+    $featured_image_id = get_post_thumbnail_id($recipe_id);
+    $featured_image_url = $featured_image_id ? wp_get_attachment_url($featured_image_id) : '';
 } else {
     $recipe_title = '';
     $recipe_ingredients = '';
     $recipe_method = '';
     $recipe_notes = '';
     $recipe_category = array();
+    $featured_image_id = 0;
+    $featured_image_url = '';
 }
 
 // Handle form submission
@@ -169,8 +160,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
     $method = sanitize_textarea_field($_POST['recipe_method']);
     $notes = sanitize_textarea_field($_POST['recipe_notes']);
     $categories = isset($_POST['recipe_categories']) ? array_map('intval', $_POST['recipe_categories']) : array();
+    $new_featured_image_id = isset($_POST['featured_image_id']) ? intval($_POST['featured_image_id']) : 0;
     
-    // Auto-format plain text to HTML lists
     function auto_format_content($content, $is_method = false) {
         if (empty($content)) return '';
         if (strpos($content, '<ul>') !== false || strpos($content, '<ol>') !== false) return $content;
@@ -181,11 +172,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
         
         $list_items = [];
         foreach ($lines as $line) {
-            // Only strip list markers (bullets, dashes), NOT recipe numbers
-            // Remove: "- item", "* item", "• item" but keep "1/2 cup", "2-3 eggs"
             $line = preg_replace('/^[\-•*]\s+/', '', $line);
             
-            // For method steps, remove step numbers like "1. " or "1) "
             if ($is_method) {
                 $line = preg_replace('/^\d+[\.)]\s+/', '', $line);
             }
@@ -203,7 +191,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
         $notes = '<p>' . esc_html($notes) . '</p>';
     }
     
-    // Validation
     $errors = array();
     if (empty($title)) {
         $errors[] = 'Recipe title is required.';
@@ -227,45 +214,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
         
         if ($is_editing) {
             $post_data['ID'] = $recipe_id;
-            // Preserve original author when editing
-            // post_author is NOT included - wp_update_post will keep existing author
             $saved_id = wp_update_post($post_data);
         } else {
-            // New recipe - set current user as author
             $post_data['post_author'] = get_current_user_id();
             $saved_id = wp_insert_post($post_data);
         }
         
         if ($saved_id && !is_wp_error($saved_id)) {
-            // Save meta
             update_post_meta($saved_id, '_recipe_ingredients', $ingredients);
             update_post_meta($saved_id, '_recipe_method', $method);
             update_post_meta($saved_id, '_recipe_notes', $notes);
             
-            // Set categories using custom tables (multiple allowed)
+            // Set featured image if one was uploaded
+            if ($new_featured_image_id > 0) {
+                set_post_thumbnail($saved_id, $new_featured_image_id);
+            }
+            
             if (!empty($categories)) {
                 set_recipe_categories($saved_id, $categories);
             } else {
-                set_recipe_categories($saved_id, array()); // Clear categories
+                set_recipe_categories($saved_id, array());
             }
             
-            // Redirect back to manager with category filter and collection if there was one
             $redirect_url = home_url('/recipe-manager/?saved=1');
             
-            // Preserve collection parameter
             if (!empty($_GET['collection'])) {
                 $redirect_url = add_query_arg('collection', intval($_GET['collection']), $redirect_url);
             }
             
-            // First priority: return to the filter we came from
             if (!empty($_GET['from_cat'])) {
                 $redirect_url = add_query_arg('recipe_cat', intval($_GET['from_cat']), $redirect_url);
-            } 
-            // Second priority: if recipe has single category, use that
-            elseif (!empty($categories) && count($categories) === 1) {
+            } elseif (!empty($categories) && count($categories) === 1) {
                 $redirect_url = add_query_arg('recipe_cat', $categories[0], $redirect_url);
             }
-            // Otherwise: just go to unfiltered view
             
             wp_redirect($redirect_url);
             exit;
@@ -273,7 +254,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
             $errors[] = 'Error saving recipe. Please try again.';
         }
     } else {
-        // Errors found - preserve submitted values for re-display
         $recipe_title = $title;
         $recipe_ingredients = $ingredients;
         $recipe_method = $method;
@@ -306,6 +286,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
     padding: 30px;
     border: 2px solid #c84a31;
     border-radius: 8px;
+}
+
+.image-upload-section {
+    background: #f8f9fa;
+    border: 2px dashed #c84a31;
+    border-radius: 8px;
+    padding: 25px;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.image-upload-section h3 {
+    color: #c84a31;
+    margin: 0 0 15px 0;
+    font-size: 20px;
+}
+
+.image-upload-section p {
+    color: #666;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+.image-preview {
+    max-width: 400px;
+    margin: 15px auto;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.image-preview img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.upload-btn {
+    display: inline-block;
+    padding: 12px 24px;
+    background: #c84a31;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.upload-btn:hover {
+    background: #a63a25;
+}
+
+.upload-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.upload-status {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.upload-status.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.upload-status.error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.upload-status.processing {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
 }
 
 .form-group {
@@ -459,8 +520,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
     </div>
     <?php endif; ?>
     
-    <form method="post" class="editor-form">
+    <!-- Featured Image Upload Section -->
+    <div class="image-upload-section">
+        <h3>📸 Upload Featured Image</h3>
+        <p>Upload a photo of your recipe (handwritten recipe cards will be automatically extracted!)</p>
+        
+        <input type="file" id="recipeImageFile" accept="image/*" style="display: none;" />
+        <button type="button" class="upload-btn" id="uploadImageBtn" onclick="document.getElementById('recipeImageFile').click();">
+            Choose Image
+        </button>
+        <button type="button" class="upload-btn" id="extractBtn" style="display: none; margin-left: 10px;">
+            Upload & Extract Recipe
+        </button>
+        
+        <div id="imagePreview" class="image-preview" style="display: none;">
+            <img id="previewImg" src="" alt="Recipe image preview" />
+        </div>
+        
+        <div id="uploadStatus" class="upload-status" style="display: none;"></div>
+        
+        <?php if ($featured_image_url): ?>
+        <div class="image-preview" style="display: block;">
+            <img src="<?php echo esc_url($featured_image_url); ?>" alt="Current featured image" />
+            <p style="font-size: 13px; color: #666; margin-top: 10px;">Current featured image</p>
+        </div>
+        <?php endif; ?>
+    </div>
+    
+    <form method="post" class="editor-form" id="recipeForm">
         <?php wp_nonce_field('save_recipe_' . $recipe_id); ?>
+        <input type="hidden" name="featured_image_id" id="featuredImageId" value="<?php echo $featured_image_id; ?>" />
         
         <div class="form-group">
             <label for="recipe_title">
@@ -529,7 +618,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
             
             <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background: #fafafa; max-height: 300px; overflow-y: auto;">
                 <?php
-                // Get categories for the recipe owner (not current user if editing someone else's recipe)
                 $recipe_owner_id = $is_editing ? get_post_field('post_author', $recipe_id) : get_current_user_id();
                 
                 $categories = get_user_categories($recipe_owner_id);
@@ -592,5 +680,102 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
         </div>
     </form>
 </div>
+
+<script>
+// Image upload and OCR handling
+let selectedFile = null;
+
+document.getElementById('recipeImageFile').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    selectedFile = file;
+    
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('previewImg').src = e.target.result;
+        document.getElementById('imagePreview').style.display = 'block';
+        document.getElementById('extractBtn').style.display = 'inline-block';
+        document.getElementById('uploadStatus').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+});
+
+document.getElementById('extractBtn').addEventListener('click', function() {
+    if (!selectedFile) {
+        alert('Please select an image first');
+        return;
+    }
+    
+    // Show processing status
+    const statusDiv = document.getElementById('uploadStatus');
+    statusDiv.className = 'upload-status processing';
+    statusDiv.textContent = '🔄 Uploading image and extracting recipe data...';
+    statusDiv.style.display = 'block';
+    
+    // Disable button during upload
+    this.disabled = true;
+    document.getElementById('uploadImageBtn').disabled = true;
+    
+    // Create FormData
+    const formData = new FormData();
+    formData.append('action', 'upload_recipe_image');
+    formData.append('recipe_id', '<?php echo $recipe_id; ?>');
+    formData.append('nonce', '<?php echo wp_create_nonce('recipe_image_upload'); ?>');
+    formData.append('recipe_image', selectedFile);
+    
+    // Upload and extract
+    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update status
+            statusDiv.className = 'upload-status success';
+            
+            if (data.data.extracted_data.found === false) {
+                statusDiv.textContent = '✅ Image uploaded! No recipe data found in image.';
+                document.getElementById('recipe_notes').value = 'No recipe interpreted in featured image';
+            } else {
+                statusDiv.textContent = '✅ Image uploaded and recipe extracted! Check the fields below.';
+                
+                // Fill in the form fields
+                if (data.data.extracted_data.title) {
+                    document.getElementById('recipe_title').value = data.data.extracted_data.title;
+                }
+                if (data.data.extracted_data.ingredients) {
+                    document.getElementById('recipe_ingredients').value = data.data.extracted_data.ingredients;
+                }
+                if (data.data.extracted_data.method) {
+                    document.getElementById('recipe_method').value = data.data.extracted_data.method;
+                }
+                
+                // Put raw extraction in notes
+                document.getElementById('recipe_notes').value = 'RAW EXTRACTION:\n\n' + data.data.raw_response;
+            }
+            
+            // Store featured image ID
+            document.getElementById('featuredImageId').value = data.data.attachment_id;
+            
+        } else {
+            statusDiv.className = 'upload-status error';
+            statusDiv.textContent = '❌ Error: ' + (data.data ? data.data.message : 'Unknown error');
+        }
+        
+        // Re-enable buttons
+        document.getElementById('extractBtn').disabled = false;
+        document.getElementById('uploadImageBtn').disabled = false;
+    })
+    .catch(error => {
+        statusDiv.className = 'upload-status error';
+        statusDiv.textContent = '❌ Upload failed: ' + error.message;
+        document.getElementById('extractBtn').disabled = false;
+        document.getElementById('uploadImageBtn').disabled = false;
+    });
+});
+</script>
 
 <?php get_footer(); ?>

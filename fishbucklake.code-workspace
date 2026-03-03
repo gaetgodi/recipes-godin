@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "../fishbucklake"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"workbench.colorCustomizations": {
+			"titleBar.activeBackground": "#79f315",
+			"titleBar.activeForeground": "#0d0e0d",
+			"activityBar.background": "#038314"
+		}
+	}
+}
