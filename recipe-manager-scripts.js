@@ -130,3 +130,56 @@ function clearFilters() {
     
     window.location.href = newUrl;
 }
+// Search function - filters recipes by title in real-time
+function searchRecipes() {
+    const searchInput = document.getElementById('recipeSearch');
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    const tableRows = document.querySelectorAll('.recipe-manager-table tbody tr');
+    let visibleCount = 0;
+    
+    tableRows.forEach(row => {
+        // Skip the "no recipes" message row
+        if (row.cells.length < 4) {
+            return;
+        }
+        
+        // Get the recipe title from the third cell (index 2)
+        const titleCell = row.cells[2];
+        const titleLink = titleCell.querySelector('.recipe-title-link');
+        
+        if (titleLink) {
+            const title = titleLink.textContent.toLowerCase();
+            
+            if (title.includes(searchTerm)) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+                // Uncheck hidden rows
+                const checkbox = row.querySelector('.recipe-checkbox');
+                if (checkbox && checkbox.checked) {
+                    checkbox.checked = false;
+                }
+            }
+        }
+    });
+    
+    // Update the count display
+    updateRecipeCount(visibleCount);
+    updateSelectedCount();
+}
+
+// Clear search and show all recipes
+function clearSearch() {
+    const searchInput = document.getElementById('recipeSearch');
+    searchInput.value = '';
+    searchRecipes(); // This will show all recipes again
+}
+
+// Update recipe count display
+function updateRecipeCount(count) {
+    const countElement = document.querySelector('.recipe-count strong');
+    if (countElement) {
+        countElement.textContent = count;
+    }
+}
