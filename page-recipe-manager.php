@@ -334,7 +334,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
         <?php endif; ?>
     </div>
     
-    <form method="post" id="recipeManagerForm" onsubmit="cleanupHiddenCheckboxes(event)">
+<form method="post" id="recipeManagerForm">
         <?php
         // Get recipes from selected collection
         $args = array(
@@ -436,9 +436,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                 Clear
             </button>
         </div>
-        
-        <!-- Bulk Actions - Top -->
-        
+ 
         <!-- Bulk Actions - Top -->
         <div class="bulk-actions" style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 6px;">
             <label><strong>With Selected:</strong></label>

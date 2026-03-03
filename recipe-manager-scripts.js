@@ -49,7 +49,7 @@ function toggleSelectAll() {
         const checkbox = row.querySelector('.recipe-checkbox');
         if (!checkbox) return;
         
-        // Skip if row is hidden
+        // Only check visible rows
         if (row.style.display === 'none') {
             checkbox.checked = false;
         } else {
@@ -175,16 +175,4 @@ function updateRecipeCount(count) {
     if (countElement) {
         countElement.textContent = count;
     }
-}
-
-// Disable hidden checkboxes before form submission
-function cleanupHiddenCheckboxes(event) {
-    const allCheckboxes = document.querySelectorAll('.recipe-checkbox');
-    
-    allCheckboxes.forEach(checkbox => {
-        const row = checkbox.closest('tr');
-        if (row && row.style.display === 'none') {
-            checkbox.disabled = true;
-        }
-    });
 }
