@@ -296,6 +296,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
     <div class="image-upload-section">
         <h3>📸 Upload Featured Image</h3>
         <p>Upload a photo of your recipe (handwritten recipe cards will be automatically extracted!)</p>
+        <p style="font-size: 13px; color: #666; margin-top: 5px;">
+            <strong>Accepted formats:</strong> JPG, PNG, GIF, WebP<br>
+            <strong>Maximum file size:</strong> 5 MB
+        </p>
         
         <input type="file" id="recipeImageFile" accept="image/*" style="display: none;" />
         <button type="button" class="upload-btn" id="uploadImageBtn" onclick="document.getElementById('recipeImageFile').click();">
@@ -461,6 +465,22 @@ document.getElementById('recipeImageFile').addEventListener('change', function(e
     const file = e.target.files[0];
     if (!file) return;
     
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+        alert('Please upload a valid image file (JPG, PNG, GIF, or WebP)');
+        this.value = '';
+        return;
+    }
+    
+    // Validate file size (5MB = 5 * 1024 * 1024 bytes)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+        alert('Image is too large! Please use an image smaller than 5 MB.\n\nCurrent size: ' + (file.size / 1024 / 1024).toFixed(2) + ' MB');
+        this.value = '';
+        return;
+    }
+    
     selectedFile = file;
     
     // Show preview
@@ -504,8 +524,9 @@ document.getElementById('extractBtn').addEventListener('click', function() {
     })
     .then(response => response.json())
     .then(data => {
+        console.log('Full API Response:', data);
+        
         if (data.success) {
-            // Update status
             statusDiv.className = 'upload-status success';
             
             if (data.data.extracted_data.found === false) {
@@ -514,7 +535,6 @@ document.getElementById('extractBtn').addEventListener('click', function() {
             } else {
                 statusDiv.textContent = '✅ Image uploaded and recipe extracted! Check the fields below.';
                 
-                // Fill in the form fields
                 if (data.data.extracted_data.title) {
                     document.getElementById('recipe_title').value = data.data.extracted_data.title;
                 }
@@ -525,23 +545,23 @@ document.getElementById('extractBtn').addEventListener('click', function() {
                     document.getElementById('recipe_method').value = data.data.extracted_data.method;
                 }
                 
-                // Put raw extraction in notes
                 document.getElementById('recipe_notes').value = 'RAW EXTRACTION:\n\n' + data.data.raw_response;
             }
             
-            // Store featured image ID
             document.getElementById('featuredImageId').value = data.data.attachment_id;
             
         } else {
             statusDiv.className = 'upload-status error';
-            statusDiv.textContent = '❌ Error: ' + (data.data ? data.data.message : 'Unknown error');
+            const errorMsg = data.data && data.data.message ? data.data.message : 'Unknown error';
+            statusDiv.textContent = '❌ Error: ' + errorMsg;
+            console.error('Error details:', data);
         }
         
-        // Re-enable buttons
         document.getElementById('extractBtn').disabled = false;
         document.getElementById('uploadImageBtn').disabled = false;
     })
     .catch(error => {
+        console.error('Fetch error:', error);
         statusDiv.className = 'upload-status error';
         statusDiv.textContent = '❌ Upload failed: ' + error.message;
         document.getElementById('extractBtn').disabled = false;

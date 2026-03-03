@@ -253,6 +253,7 @@ add_filter('manage_users_custom_column', function($value, $column_name, $user_id
     }
     return $value;
 }, 10, 3);
+
 // Hide admin bar for non-administrators
 add_action('after_setup_theme', 'hide_admin_bar_for_non_admins');
 function hide_admin_bar_for_non_admins() {
@@ -269,6 +270,7 @@ function restrict_admin_access() {
         exit;
     }
 }
+
 /**
  * Enqueue Recipe Page Styles
  */
@@ -292,3 +294,6 @@ function enqueue_recipe_page_styles() {
     }
 }
 add_action('wp_enqueue_scripts', 'enqueue_recipe_page_styles');
+
+// Load recipe image upload handler for AJAX
+require_once(get_stylesheet_directory() . '/recipe-image-upload-handler.php');
