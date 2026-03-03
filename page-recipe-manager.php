@@ -334,7 +334,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
         <?php endif; ?>
     </div>
     
-    <form method="post" id="recipeManagerForm">
+    <form method="post" id="recipeManagerForm" onsubmit="cleanupHiddenCheckboxes(event)">
         <?php
         // Get recipes from selected collection
         $args = array(

@@ -46,17 +46,13 @@ function toggleSelectAll() {
     const allRows = document.querySelectorAll('.recipe-manager-table tbody tr');
     
     allRows.forEach(row => {
+        const checkbox = row.querySelector('.recipe-checkbox');
+        if (!checkbox) return;
+        
         // Skip if row is hidden
         if (row.style.display === 'none') {
-            // Uncheck hidden rows
-            const checkbox = row.querySelector('.recipe-checkbox');
-            if (checkbox) checkbox.checked = false;
-            return;
-        }
-        
-        // Toggle visible rows
-        const checkbox = row.querySelector('.recipe-checkbox');
-        if (checkbox) {
+            checkbox.checked = false;
+        } else {
             checkbox.checked = selectAll.checked;
         }
     });
@@ -64,7 +60,6 @@ function toggleSelectAll() {
     updateSelectedCount();
 }
 
-// Multi-category filter functions
 function toggleCategoryDropdown() {
     const dropdown = document.getElementById('categoryDropdown');
     dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
@@ -94,10 +89,8 @@ function updateFilterButton() {
 }
 
 function applyFiltersInstantly() {
-    // Update button text
     updateFilterButton();
     
-    // Apply filters immediately
     const checkboxes = document.querySelectorAll('input[name="category_filters[]"]:checked');
     const selectedCats = Array.from(checkboxes).map(cb => cb.value);
     
@@ -108,12 +101,10 @@ function applyFiltersInstantly() {
     let newUrl = baseUrl;
     const params = [];
     
-    // Preserve collection parameter
     if (collection) {
         params.push('collection=' + collection);
     }
     
-    // Add category filters (comma-separated for AND logic)
     if (selectedCats.length > 0) {
         params.push('recipe_cat=' + selectedCats.join(','));
     }
@@ -123,11 +114,6 @@ function applyFiltersInstantly() {
     }
     
     window.location.href = newUrl;
-}
-
-function applyFilters() {
-    // Keep this for any legacy calls
-    applyFiltersInstantly();
 }
 
 function clearFilters() {
@@ -142,7 +128,7 @@ function clearFilters() {
     
     window.location.href = newUrl;
 }
-// Search function - filters recipes by title in real-time
+
 function searchRecipes() {
     const searchInput = document.getElementById('recipeSearch');
     const searchTerm = searchInput.value.toLowerCase().trim();
@@ -151,38 +137,54 @@ function searchRecipes() {
     
     tableRows.forEach(row => {
         // Skip the "no recipes" message row
-        if (row.cells.length < 4) {
-            return;
-        }
+        if (row.cells.length < 4) return;
         
-        // Get the recipe title from the third cell (index 2)
         const titleCell = row.cells[2];
         const titleLink = titleCell.querySelector('.recipe-title-link');
         
         if (titleLink) {
             const title = titleLink.textContent.toLowerCase();
+            const checkbox = row.querySelector('.recipe-checkbox');
             
             if (title.includes(searchTerm)) {
                 row.style.display = '';
                 visibleCount++;
             } else {
                 row.style.display = 'none';
-                // Uncheck hidden rows
-                const checkbox = row.querySelector('.recipe-checkbox');
-                if (checkbox && checkbox.checked) {
-                    checkbox.checked = false;
-                }
+                if (checkbox) checkbox.checked = false;
             }
         }
     });
     
-    // Update the count display
     updateRecipeCount(visibleCount);
     updateSelectedCount();
     
-    // Uncheck "Select All" when filtering changes
+    // Uncheck "Select All" when search changes
     const selectAll = document.getElementById('selectAll');
-    if (selectAll) {
-        selectAll.checked = false;
+    if (selectAll) selectAll.checked = false;
+}
+
+function clearSearch() {
+    const searchInput = document.getElementById('recipeSearch');
+    searchInput.value = '';
+    searchRecipes();
+}
+
+function updateRecipeCount(count) {
+    const countElement = document.querySelector('.recipe-count strong');
+    if (countElement) {
+        countElement.textContent = count;
     }
+}
+
+// Disable hidden checkboxes before form submission
+function cleanupHiddenCheckboxes(event) {
+    const allCheckboxes = document.querySelectorAll('.recipe-checkbox');
+    
+    allCheckboxes.forEach(checkbox => {
+        const row = checkbox.closest('tr');
+        if (row && row.style.display === 'none') {
+            checkbox.disabled = true;
+        }
+    });
 }
