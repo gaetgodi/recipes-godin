@@ -226,9 +226,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
             update_post_meta($saved_id, '_recipe_notes', $notes);
             
             // Set featured image if one was uploaded
-            if ($new_featured_image_id > 0) {
-                set_post_thumbnail($saved_id, $new_featured_image_id);
-            }
+if ($new_featured_image_id > 0) {
+    set_post_thumbnail($saved_id, $new_featured_image_id);
+    
+    // Also update the attachment's post parent to link it to this recipe
+    wp_update_post(array(
+        'ID' => $new_featured_image_id,
+        'post_parent' => $saved_id
+    ));
+}
             
             if (!empty($categories)) {
                 set_recipe_categories($saved_id, $categories);
