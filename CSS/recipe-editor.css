@@ -1,0 +1,227 @@
+/* Recipe Editor Page Styles */
+
+.recipe-editor {
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 0 20px;
+}
+
+.recipe-editor h1 {
+    color: #c84a31;
+    font-size: 32px;
+    margin-bottom: 10px;
+}
+
+.recipe-editor-subtitle {
+    color: #666;
+    margin-bottom: 30px;
+}
+
+.editor-form {
+    background: white;
+    padding: 30px;
+    border: 2px solid #c84a31;
+    border-radius: 8px;
+}
+
+.image-upload-section {
+    background: #f8f9fa;
+    border: 2px dashed #c84a31;
+    border-radius: 8px;
+    padding: 25px;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.image-upload-section h3 {
+    color: #c84a31;
+    margin: 0 0 15px 0;
+    font-size: 20px;
+}
+
+.image-upload-section p {
+    color: #666;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+.image-preview {
+    max-width: 400px;
+    margin: 15px auto;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.image-preview img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.upload-btn {
+    display: inline-block;
+    padding: 12px 24px;
+    background: #c84a31;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.upload-btn:hover {
+    background: #a63a25;
+}
+
+.upload-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.upload-status {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.upload-status.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.upload-status.error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.upload-status.processing {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.form-group {
+    margin-bottom: 25px;
+}
+
+.form-group label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: #333;
+    font-size: 16px;
+}
+
+.form-group .help-text {
+    display: block;
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 8px;
+    font-style: italic;
+}
+
+.form-group input[type="text"],
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+}
+
+.form-group textarea {
+    min-height: 150px;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+.form-group input[type="text"]:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #c84a31;
+    box-shadow: 0 0 0 3px rgba(200, 74, 49, 0.1);
+}
+
+.required {
+    color: #d63638;
+}
+
+.error-messages {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.error-messages ul {
+    margin: 10px 0 0 20px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+    padding-top: 30px;
+    border-top: 2px solid #eee;
+}
+
+.btn {
+    padding: 12px 30px;
+    font-size: 16px;
+    font-weight: bold;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-primary {
+    background: #00a32a;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #008a20;
+}
+
+.btn-secondary {
+    background: #666;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #444;
+}
+
+.btn-danger {
+    background: #d63638;
+    color: white;
+    margin-left: auto;
+}
+
+.btn-danger:hover {
+    background: #b32d2e;
+}
+
+.tip-box {
+    background: #f0f8ff;
+    border-left: 4px solid #0073aa;
+    padding: 12px 15px;
+    margin-top: 8px;
+    font-size: 13px;
+}
+
+.tip-box strong {
+    color: #0073aa;
+}

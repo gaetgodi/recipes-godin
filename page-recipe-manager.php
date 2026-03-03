@@ -14,118 +14,6 @@ $current_user = wp_get_current_user();
 require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
 ?>
 
-<style>
-.recipe-manager {
-    max-width: 1400px;
-    margin: 40px auto;
-    padding: 0 20px;
-}
-
-.recipe-manager h1 {
-    color: #c84a31;
-    font-size: 36px;
-    margin-bottom: 30px;
-}
-
-.filter-section {
-    background: #f9f9f9;
-    padding: 20px;
-    margin-bottom: 30px;
-    border: 2px solid #c84a31;
-    display: flex;
-    gap: 20px;
-    align-items: center;
-}
-
-.recipe-manager-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.recipe-manager-table thead {
-    background: #c84a31;
-    color: white;
-}
-
-.recipe-manager-table th {
-    padding: 15px;
-    text-align: left;
-    font-weight: bold;
-}
-
-.recipe-manager-table td {
-    padding: 5px 15px;
-    border-bottom: 1px solid #eee;
-}
-
-.recipe-manager-table tbody tr:hover {
-    background: #f9f9f9;
-}
-
-.recipe-manager-table input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    cursor: pointer;
-}
-
-.recipe-id {
-    font-family: 'Courier New', monospace;
-    color: #666;
-    font-weight: bold;
-}
-
-.recipe-title-link {
-    color: #0066cc;
-    text-decoration: none;
-    font-weight: 500;
-}
-
-.recipe-title-link:hover {
-    text-decoration: underline;
-}
-
-.bulk-actions {
-    background: #fff;
-    padding: 20px;
-    margin-top: 20px;
-    border: 2px solid #c84a31;
-    display: flex;
-    gap: 15px;
-    align-items: center;
-}
-
-.action-btn {
-    padding: 10px 20px;
-    font-size: 14px;
-    cursor: pointer;
-    border: none;
-    border-radius: 3px;
-    font-weight: bold;
-}
-
-.action-btn:hover {
-    opacity: 0.8;
-}
-
-.action-btn:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-}
-
-.recipe-count {
-    font-size: 14px;
-    color: #666;
-    margin-bottom: 15px;
-}
-
-.selected-count {
-    font-weight: bold;
-    color: #c84a31;
-}
-</style>
-
 <div class="recipe-manager">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h1 style="margin: 0;"><?php echo esc_html($current_user->display_name); ?>'s Recipe Manager</h1>
@@ -155,7 +43,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
             break;
         }
     }
-//----
+    
     // If can't access, default to first available or own
     if (!$can_access_selected && !empty($accessible_collections)) {
         $current_collection = $accessible_collections[0];
@@ -334,7 +222,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
         <?php endif; ?>
     </div>
     
-<form method="post" id="recipeManagerForm">
+    <form method="post" id="recipeManagerForm">
         <?php
         // Get recipes from selected collection
         $args = array(
@@ -390,27 +278,6 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
         }
         
         $recipes = new WP_Query($args);
-        
-        // DEBUG - Check what's happening with Mulligatawny
-        if (!empty($_GET['recipe_cat'])) {
-            echo "<!-- DEBUG: Category filter active -->";
-            echo "<!-- DEBUG: Selected cat IDs: " . implode(',', $cat_ids) . " -->";
-            echo "<!-- DEBUG: Found recipe IDs: " . (!empty($args['post__in']) ? implode(',', $args['post__in']) : 'NONE') . " -->";
-            echo "<!-- DEBUG: WP_Query found: " . $recipes->found_posts . " posts -->";
-            
-            // Check Mulligatawny specifically
-            global $wpdb;
-            $mull_cats = $wpdb->get_results("
-                SELECT p.ID, p.post_title, GROUP_CONCAT(r.cat_id) as cat_ids
-                FROM {$wpdb->posts} p
-                LEFT JOIN {$wpdb->prefix}recipe_category_relationships r ON p.ID = r.recipe_id
-                WHERE p.post_title LIKE '%Mulligatawny%'
-                GROUP BY p.ID
-            ");
-            foreach ($mull_cats as $row) {
-                echo "<!-- DEBUG: Mulligatawny ID=" . $row->ID . " categories=" . $row->cat_ids . " -->";
-            }
-        }
         ?>
         
         <div class="recipe-count">
@@ -436,7 +303,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                 Clear
             </button>
         </div>
- 
+        
         <!-- Bulk Actions - Top -->
         <div class="bulk-actions" style="margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 6px;">
             <label><strong>With Selected:</strong></label>

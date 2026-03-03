@@ -269,3 +269,26 @@ function restrict_admin_access() {
         exit;
     }
 }
+/**
+ * Enqueue Recipe Page Styles
+ */
+function enqueue_recipe_page_styles() {
+    // Recipe Editor
+    if (is_page_template('page-recipe-editor.php')) {
+        wp_enqueue_style('recipe-editor-style',
+            get_stylesheet_directory_uri() . '/css/recipe-editor.css',
+            array(),
+            wp_get_theme()->get('Version')
+        );
+    }
+    
+    // Recipe Manager
+    if (is_page_template('page-recipe-manager.php')) {
+        wp_enqueue_style('recipe-manager-style',
+            get_stylesheet_directory_uri() . '/css/recipe-manager.css',
+            array(),
+            wp_get_theme()->get('Version')
+        );
+    }
+}
+add_action('wp_enqueue_scripts', 'enqueue_recipe_page_styles');
