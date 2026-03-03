@@ -157,6 +157,15 @@ Be accurate with measurements and spelling. Preserve the original wording as muc
     
     $body = wp_remote_retrieve_body($response);
     $data = json_decode($body, true);
+
+    // Debug output
+if (empty($data['content'][0]['text'])) {
+    $http_code = wp_remote_retrieve_response_code($response);
+    return array(
+        'success' => false,
+        'error' => 'API Error (Code: ' . $http_code . '): ' . substr($body, 0, 500)
+    );
+}
     
     if (empty($data['content'][0]['text'])) {
         return array(
