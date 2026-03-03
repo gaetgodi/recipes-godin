@@ -46,7 +46,11 @@ function toggleSelectAll() {
     const checkboxes = document.querySelectorAll('.recipe-checkbox');
     
     checkboxes.forEach(cb => {
-        cb.checked = selectAll.checked;
+        // Only toggle checkboxes in visible rows
+        const row = cb.closest('tr');
+        if (row && row.style.display !== 'none') {
+            cb.checked = selectAll.checked;
+        }
     });
     
     updateSelectedCount();
