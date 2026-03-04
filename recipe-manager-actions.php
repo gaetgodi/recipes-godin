@@ -10,6 +10,58 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * Helper function to copy featured image from one recipe to another
+ */
+function copy_recipe_featured_image($source_recipe_id, $target_recipe_id) {
+    $original_thumbnail_id = get_post_thumbnail_id($source_recipe_id);
+    
+    if (!$original_thumbnail_id) {
+        return false; // No image to copy
+    }
+    
+    // Get original file
+    $original_file = get_attached_file($original_thumbnail_id);
+    if (!$original_file || !file_exists($original_file)) {
+        return false;
+    }
+    
+    $upload_dir = wp_upload_dir();
+    $filename = basename($original_file);
+    $new_file = $upload_dir['path'] . '/' . wp_unique_filename($upload_dir['path'], $filename);
+    
+    // Copy the physical file
+    if (!copy($original_file, $new_file)) {
+        return false;
+    }
+    
+    // Create new attachment
+    $wp_filetype = wp_check_filetype($filename, null);
+    $attachment = array(
+        'post_mime_type' => $wp_filetype['type'],
+        'post_title' => sanitize_file_name(pathinfo($filename, PATHINFO_FILENAME)),
+        'post_content' => '',
+        'post_status' => 'inherit'
+    );
+    
+    $new_thumbnail_id = wp_insert_attachment($attachment, $new_file, $target_recipe_id);
+    
+    if (is_wp_error($new_thumbnail_id)) {
+        @unlink($new_file); // Clean up file if attachment creation failed
+        return false;
+    }
+    
+    // Generate metadata
+    require_once(ABSPATH . 'wp-admin/includes/image.php');
+    $attach_data = wp_generate_attachment_metadata($new_thumbnail_id, $new_file);
+    wp_update_attachment_metadata($new_thumbnail_id, $attach_data);
+    
+    // Set as featured image
+    set_post_thumbnail($target_recipe_id, $new_thumbnail_id);
+    
+    return true;
+}
+
 // Handle GET actions (like copy_recipe from links)
 if (isset($_GET['action'])) {
     $action = sanitize_text_field($_GET['action']);
@@ -19,6 +71,9 @@ if (isset($_GET['action'])) {
         $result = copy_recipe_to_my_collection(intval($_GET['recipe_id']), get_current_user_id());
         
         if (isset($result['success'])) {
+            // Copy featured image
+            copy_recipe_featured_image(intval($_GET['recipe_id']), $result['recipe_id']);
+            
             // Success - redirect to editor with promotion flag if needed
             $redirect_url = home_url('/recipe-editor/?id=' . $result['recipe_id'] . '&copied=1');
             if (isset($result['promoted']) && $result['promoted']) {
@@ -54,7 +109,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                             array('%d')
                         );
                         
-                        // Delete the recipe post
+                        // Delete the recipe post (WordPress will auto-delete attached featured image)
                         wp_delete_post($post_id, true);
                     }
                 }
@@ -117,6 +172,8 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                 $result = copy_recipe_to_my_collection($recipe_id, get_current_user_id());
                 
                 if (isset($result['success'])) {
+                    // Copy featured image
+                    copy_recipe_featured_image($recipe_id, $result['recipe_id']);
                     $copied_count++;
                 } elseif (isset($result['error'])) {
                     $skipped_count++;
@@ -156,6 +213,9 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                         update_post_meta($new_id, '_recipe_ingredients', get_post_meta($original_id, '_recipe_ingredients', true));
                         update_post_meta($new_id, '_recipe_method', get_post_meta($original_id, '_recipe_method', true));
                         update_post_meta($new_id, '_recipe_notes', get_post_meta($original_id, '_recipe_notes', true));
+                        
+                        // Copy featured image
+                        copy_recipe_featured_image($original_id, $new_id);
                         
                         // Copy categories using custom tables
                         $source_cats = get_recipe_categories($original_id);
@@ -230,6 +290,9 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                             update_post_meta($new_id, '_recipe_ingredients', get_post_meta($original_id, '_recipe_ingredients', true));
                             update_post_meta($new_id, '_recipe_method', get_post_meta($original_id, '_recipe_method', true));
                             update_post_meta($new_id, '_recipe_notes', get_post_meta($original_id, '_recipe_notes', true));
+                            
+                            // Copy featured image
+                            copy_recipe_featured_image($original_id, $new_id);
                             
                             // Generate new unique recipe ID
                             $recipe_permanent_id = 'R' . str_pad($new_id, 4, '0', STR_PAD_LEFT);
