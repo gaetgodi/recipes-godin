@@ -6,6 +6,58 @@
  */
 
 /**
+ * Helper function to copy featured image from one recipe to another
+ */
+function copy_recipe_featured_image($source_recipe_id, $target_recipe_id) {
+    $original_thumbnail_id = get_post_thumbnail_id($source_recipe_id);
+    
+    if (!$original_thumbnail_id) {
+        return false; // No image to copy
+    }
+    
+    // Get original file
+    $original_file = get_attached_file($original_thumbnail_id);
+    if (!$original_file || !file_exists($original_file)) {
+        return false;
+    }
+    
+    $upload_dir = wp_upload_dir();
+    $filename = basename($original_file);
+    $new_file = $upload_dir['path'] . '/' . wp_unique_filename($upload_dir['path'], $filename);
+    
+    // Copy the physical file
+    if (!copy($original_file, $new_file)) {
+        return false;
+    }
+    
+    // Create new attachment
+    $wp_filetype = wp_check_filetype($filename, null);
+    $attachment = array(
+        'post_mime_type' => $wp_filetype['type'],
+        'post_title' => sanitize_file_name(pathinfo($filename, PATHINFO_FILENAME)),
+        'post_content' => '',
+        'post_status' => 'inherit'
+    );
+    
+    $new_thumbnail_id = wp_insert_attachment($attachment, $new_file, $target_recipe_id);
+    
+    if (is_wp_error($new_thumbnail_id)) {
+        @unlink($new_file); // Clean up file if attachment creation failed
+        return false;
+    }
+    
+    // Generate metadata
+    require_once(ABSPATH . 'wp-admin/includes/image.php');
+    $attach_data = wp_generate_attachment_metadata($new_thumbnail_id, $new_file);
+    wp_update_attachment_metadata($new_thumbnail_id, $attach_data);
+    
+    // Set as featured image
+    set_post_thumbnail($target_recipe_id, $new_thumbnail_id);
+    
+    return true;
+}
+
+/**
  * Get collection owner (Author) for current user or specified user
  */
 function get_collection_owner($user_id = null) {
@@ -343,6 +395,9 @@ function copy_recipe_to_my_collection($recipe_id, $target_user_id) {
             update_post_meta($new_recipe_id, $meta_key, $meta_value);
         }
     }
+    
+    // Copy featured image
+    copy_recipe_featured_image($recipe_id, $new_recipe_id);
     
     // Copy categories - create for new user if they don't exist
     $source_categories = get_recipe_categories($recipe_id);
