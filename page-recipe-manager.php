@@ -466,72 +466,51 @@ function openShareDialog() {
         return;
     }
     
-    // Get list of users to share with
-// Get list of allowed recipients (subscribers + authors who granted permission)
-// Get list of allowed recipients (subscribers + authors who granted permission)
-<?php
-require_once(get_stylesheet_directory() . '/collection-permissions.php');
-$current_user_id = get_current_user_id();
-$is_admin = current_user_can('administrator');
-
-// Get all users
-$all_users = get_users();
-$recipient_list = array();
-
-// DEBUG
-echo '<!-- DEBUG: Current user ID: ' . $current_user_id . ' -->';
-echo '<!-- DEBUG: Is admin: ' . ($is_admin ? 'YES' : 'NO') . ' -->';
-echo '<!-- DEBUG: Total users found: ' . count($all_users) . ' -->';
-
-foreach ($all_users as $user) {
-    if ($user->ID == $current_user_id) {
-        echo '<!-- DEBUG: Skipping self: ' . $user->display_name . ' -->';
-        continue; // Skip self
-    }
+    // Get list of allowed recipients (subscribers + authors who granted permission)
+    <?php
+    require_once(get_stylesheet_directory() . '/collection-permissions.php');
+    $current_user_id = get_current_user_id();
+    $is_admin = current_user_can('administrator');
     
-    $user_roles = (array) $user->roles;
-    $is_subscriber = in_array('subscriber', $user_roles);
-    $is_author = in_array('author', $user_roles) || in_array('editor', $user_roles);
+    // Get all users
+    $all_users = get_users();
+    $recipient_list = array();
     
-    echo '<!-- DEBUG: User: ' . $user->display_name . ' (ID: ' . $user->ID . ') Roles: ' . implode(',', $user_roles) . ' -->';
-    
-    $can_share_with = false;
-    $role_display = '';
-    
-    // Admins can share with anyone
-    if ($is_admin) {
-        $can_share_with = true;
-        echo '<!-- DEBUG: Admin - allowed to share with ' . $user->display_name . ' -->';
-    }
-    // Subscribers can always receive shares
-    elseif ($is_subscriber) {
-        $can_share_with = true;
-        $role_display = ' [Subscriber]';
-        echo '<!-- DEBUG: Subscriber - allowed to share with ' . $user->display_name . ' -->';
-    }
-    // Authors: only if they granted current user permission
-    elseif ($is_author) {
-        $has_permission = user_can_view_collection($current_user_id, $user->ID);
-        echo '<!-- DEBUG: Author ' . $user->display_name . ' - has_permission: ' . ($has_permission ? 'YES' : 'NO') . ' -->';
-        if ($has_permission) {
+    foreach ($all_users as $user) {
+        if ($user->ID == $current_user_id) continue; // Skip self
+        
+        $user_roles = (array) $user->roles;
+        $is_subscriber = in_array('subscriber', $user_roles);
+        $is_author = in_array('author', $user_roles) || in_array('editor', $user_roles);
+        
+        $can_share_with = false;
+        $role_display = '';
+        
+        // Admins can share with anyone
+        if ($is_admin) {
             $can_share_with = true;
-            $role_display = ' [Author]';
+        }
+        // Subscribers can always receive shares
+        elseif ($is_subscriber) {
+            $can_share_with = true;
+            $role_display = ' [Subscriber]';
+        }
+        // Authors: only if they granted current user permission
+        elseif ($is_author) {
+            if (user_can_view_collection($current_user_id, $user->ID)) {
+                $can_share_with = true;
+                $role_display = ' [Author]';
+            }
+        }
+        
+        if ($can_share_with) {
+            $recipient_list[] = array(
+                'id' => $user->ID,
+                'name' => $user->display_name . $role_display
+            );
         }
     }
-    
-    if ($can_share_with) {
-        echo '<!-- DEBUG: ADDING to recipient list: ' . $user->display_name . ' -->';
-        $recipient_list[] = array(
-            'id' => $user->ID,
-            'name' => $user->display_name . $role_display
-        );
-    } else {
-        echo '<!-- DEBUG: NOT ADDING: ' . $user->display_name . ' -->';
-    }
-}
-
-echo '<!-- DEBUG: Final recipient list count: ' . count($recipient_list) . ' -->';
-?>
+    ?>
     
     const recipients = <?php echo json_encode($recipient_list); ?>;
     
@@ -574,8 +553,6 @@ function closeShareDialog() {
 
 function executeShare() {
     const recipientId = document.getElementById('shareRecipient').value;
-    const checked = document.querySelectorAll('.recipe-checkbox:checked');
-    const recipeIds = Array.from(checked).map(cb => cb.value);
     
     const form = document.getElementById('recipeManagerForm');
     const input = document.createElement('input');
@@ -591,6 +568,40 @@ function executeShare() {
     form.appendChild(actionInput);
     
     form.submit();
+}
+
+// Real-time recipe search
+function searchRecipes() {
+    const searchTerm = document.getElementById('recipeSearch').value.toLowerCase();
+    const rows = document.querySelectorAll('.recipe-manager-table tbody tr');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        const titleCell = row.querySelector('.recipe-title-link');
+        if (!titleCell) return; // Skip "no recipes" row
+        
+        const title = titleCell.textContent.toLowerCase();
+        const checkbox = row.querySelector('.recipe-checkbox');
+        
+        if (title.includes(searchTerm)) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+            // Uncheck hidden rows
+            if (checkbox) checkbox.checked = false;
+        }
+    });
+    
+    // Update the count
+    const totalCount = document.querySelectorAll('.recipe-manager-table tbody tr').length - 1; // Subtract header
+    document.querySelector('.recipe-count strong').textContent = visibleCount;
+    updateSelectedCount();
+}
+
+function clearSearch() {
+    document.getElementById('recipeSearch').value = '';
+    searchRecipes();
 }
 
 // Initialize count on page load
