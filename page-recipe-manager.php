@@ -542,7 +542,7 @@ echo '<!-- DEBUG: Final recipient list count: ' . count($recipient_list) . ' -->
     
     let options = '';
     recipients.forEach(recipient => {
-        options += `<option value="${recipient.id}">${recipient.name}'s Collection</option>`;
+        options += `<option value="${recipient.id}">${recipient.name}</option>`;
     });
     
     const recipeWord = recipeIds.length === 1 ? 'recipe' : 'recipes';
