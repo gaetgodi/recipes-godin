@@ -467,26 +467,53 @@ function openShareDialog() {
     }
     
     // Get list of users to share with
-    <?php
-    require_once(get_stylesheet_directory() . '/collection-permissions.php');
-    $current_user_id = get_current_user_id();
-    $potential_recipients = get_users(array('role__in' => array('author', 'editor', 'subscriber')));
-    $recipient_list = array();
-    foreach ($potential_recipients as $user) {
-        if ($user->ID != $current_user_id) {
-            // Show role indicator
-            if (in_array('author', $user->roles) || in_array('editor', $user->roles)) {
-                $role_label = '';
-            } else {
-                $role_label = ' (will become author)';
-            }
-            $recipient_list[] = array(
-                'id' => $user->ID,
-                'name' => $user->display_name . $role_label
-            );
-        }
+// Get list of allowed recipients (subscribers + authors who granted permission)
+<?php
+require_once(get_stylesheet_directory() . '/collection-permissions.php');
+$current_user_id = get_current_user_id();
+$is_admin = current_user_can('administrator');
+
+// Get all users
+$all_users = get_users(array('role__in' => array('subscriber', 'author', 'editor')));
+$recipient_list = array();
+
+foreach ($all_users as $user) {
+    if ($user->ID == $current_user_id) continue; // Skip self
+    
+    $user_roles = $user->roles;
+    $is_subscriber = in_array('subscriber', $user_roles);
+    $is_author = in_array('author', $user_roles) || in_array('editor', $user_roles);
+    
+    // Allow if:
+    // 1. Administrator (can share with anyone)
+    // 2. User is a subscriber (can be promoted)
+    // 3. User is author/editor who has granted current user permission
+    if ($is_admin) {
+        $can_share_with = true;
+    } elseif ($is_subscriber) {
+        $can_share_with = true;
+    } elseif ($is_author) {
+        // Check if this author has granted current user permission
+        $can_share_with = user_can_view_collection($current_user_id, $user->ID);
+    } else {
+        $can_share_with = false;
     }
-    ?>
+    
+    if ($can_share_with) {
+        $role_label = '';
+        if ($is_subscriber) {
+            $role_label = ' (Subscriber)';
+        } elseif ($is_author) {
+            $role_label = ' (Author)';
+        }
+        
+        $recipient_list[] = array(
+            'id' => $user->ID,
+            'name' => $user->display_name . $role_label
+        );
+    }
+}
+?>
     
     const recipients = <?php echo json_encode($recipient_list); ?>;
     
