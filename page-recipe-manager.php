@@ -468,51 +468,69 @@ function openShareDialog() {
     
     // Get list of users to share with
 // Get list of allowed recipients (subscribers + authors who granted permission)
+// Get list of allowed recipients (subscribers + authors who granted permission)
 <?php
 require_once(get_stylesheet_directory() . '/collection-permissions.php');
 $current_user_id = get_current_user_id();
 $is_admin = current_user_can('administrator');
 
 // Get all users
-$all_users = get_users(array('role__in' => array('subscriber', 'author', 'editor')));
+$all_users = get_users();
 $recipient_list = array();
 
+// DEBUG
+echo '<!-- DEBUG: Current user ID: ' . $current_user_id . ' -->';
+echo '<!-- DEBUG: Is admin: ' . ($is_admin ? 'YES' : 'NO') . ' -->';
+echo '<!-- DEBUG: Total users found: ' . count($all_users) . ' -->';
+
 foreach ($all_users as $user) {
-    if ($user->ID == $current_user_id) continue; // Skip self
+    if ($user->ID == $current_user_id) {
+        echo '<!-- DEBUG: Skipping self: ' . $user->display_name . ' -->';
+        continue; // Skip self
+    }
     
-    $user_roles = $user->roles;
+    $user_roles = (array) $user->roles;
     $is_subscriber = in_array('subscriber', $user_roles);
     $is_author = in_array('author', $user_roles) || in_array('editor', $user_roles);
     
-    // Allow if:
-    // 1. Administrator (can share with anyone)
-    // 2. User is a subscriber (can be promoted)
-    // 3. User is author/editor who has granted current user permission
+    echo '<!-- DEBUG: User: ' . $user->display_name . ' (ID: ' . $user->ID . ') Roles: ' . implode(',', $user_roles) . ' -->';
+    
+    $can_share_with = false;
+    $role_display = '';
+    
+    // Admins can share with anyone
     if ($is_admin) {
         $can_share_with = true;
-    } elseif ($is_subscriber) {
+        echo '<!-- DEBUG: Admin - allowed to share with ' . $user->display_name . ' -->';
+    }
+    // Subscribers can always receive shares
+    elseif ($is_subscriber) {
         $can_share_with = true;
-    } elseif ($is_author) {
-        // Check if this author has granted current user permission
-        $can_share_with = user_can_view_collection($current_user_id, $user->ID);
-    } else {
-        $can_share_with = false;
+        $role_display = ' [Subscriber]';
+        echo '<!-- DEBUG: Subscriber - allowed to share with ' . $user->display_name . ' -->';
+    }
+    // Authors: only if they granted current user permission
+    elseif ($is_author) {
+        $has_permission = user_can_view_collection($current_user_id, $user->ID);
+        echo '<!-- DEBUG: Author ' . $user->display_name . ' - has_permission: ' . ($has_permission ? 'YES' : 'NO') . ' -->';
+        if ($has_permission) {
+            $can_share_with = true;
+            $role_display = ' [Author]';
+        }
     }
     
     if ($can_share_with) {
-        $role_label = '';
-        if ($is_subscriber) {
-            $role_label = ' (Subscriber)';
-        } elseif ($is_author) {
-            $role_label = ' (Author)';
-        }
-        
+        echo '<!-- DEBUG: ADDING to recipient list: ' . $user->display_name . ' -->';
         $recipient_list[] = array(
             'id' => $user->ID,
-            'name' => $user->display_name . $role_label
+            'name' => $user->display_name . $role_display
         );
+    } else {
+        echo '<!-- DEBUG: NOT ADDING: ' . $user->display_name . ' -->';
     }
 }
+
+echo '<!-- DEBUG: Final recipient list count: ' . count($recipient_list) . ' -->';
 ?>
     
     const recipients = <?php echo json_encode($recipient_list); ?>;
