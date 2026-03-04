@@ -6,13 +6,13 @@
 get_header();
 ?>
 
-<div style="max-width: 800px; margin: 80px auto; padding: 40px 20px; text-align: center;">
+<div style="max-width: 800px; margin: 60px auto; padding: 40px 20px; text-align: center;">
     <div style="font-size: 120px; font-weight: bold; color: #c84a31; margin-bottom: 20px;">
         404
     </div>
     
     <h1 style="font-size: 36px; color: #333; margin-bottom: 20px;">
-        Oops! Recipe Not Found
+        Oops! Recipe Not Found or page not found
     </h1>
     
     <p style="font-size: 18px; color: #666; margin-bottom: 40px;">
