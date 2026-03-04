@@ -6,7 +6,7 @@
 get_header();
 ?>
 
-<div style="max-width: 800px; margin: 60px auto; padding: 40px 20px; text-align: center;">
+<div style="max-width: 800px; margin: 80px auto; padding: 60px 20px; text-align: center;">
     <div style="font-size: 120px; font-weight: bold; color: #c84a31; margin-bottom: 20px;">
         404
     </div>
