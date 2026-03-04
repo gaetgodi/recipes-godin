@@ -10,7 +10,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
- 
 // Handle GET actions (like copy_recipe from links)
 if (isset($_GET['action'])) {
     $action = sanitize_text_field($_GET['action']);
@@ -20,9 +19,6 @@ if (isset($_GET['action'])) {
         $result = copy_recipe_to_my_collection(intval($_GET['recipe_id']), get_current_user_id());
         
         if (isset($result['success'])) {
-            // Copy featured image
-            copy_recipe_featured_image(intval($_GET['recipe_id']), $result['recipe_id']);
-            
             // Success - redirect to editor with promotion flag if needed
             $redirect_url = home_url('/recipe-editor/?id=' . $result['recipe_id'] . '&copied=1');
             if (isset($result['promoted']) && $result['promoted']) {
@@ -58,7 +54,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                             array('%d')
                         );
                         
-                        // Delete the recipe post (WordPress will auto-delete attached featured image)
+                        // Delete the recipe post
                         wp_delete_post($post_id, true);
                     }
                 }
@@ -121,8 +117,6 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                 $result = copy_recipe_to_my_collection($recipe_id, get_current_user_id());
                 
                 if (isset($result['success'])) {
-                    // Copy featured image
-                    copy_recipe_featured_image($recipe_id, $result['recipe_id']);
                     $copied_count++;
                 } elseif (isset($result['error'])) {
                     $skipped_count++;
@@ -163,9 +157,6 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                         update_post_meta($new_id, '_recipe_method', get_post_meta($original_id, '_recipe_method', true));
                         update_post_meta($new_id, '_recipe_notes', get_post_meta($original_id, '_recipe_notes', true));
                         
-                        // Copy featured image
-                        copy_recipe_featured_image($original_id, $new_id);
-                        
                         // Copy categories using custom tables
                         $source_cats = get_recipe_categories($original_id);
                         if (!empty($source_cats)) {
@@ -189,25 +180,61 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
             
         case 'share':
             if (!empty($selected_ids) && current_user_can('edit_posts') && !empty($_POST['share_to_user'])) {
+                require_once(get_stylesheet_directory() . '/collection-permissions.php');
+                
                 $recipient_id = intval($_POST['share_to_user']);
+                $current_user_id = get_current_user_id();
                 $shared_count = 0;
+                
+                // CHECK 1: Validate recipient is allowed
+                $recipient = get_userdata($recipient_id);
+                if (!$recipient) {
+                    wp_redirect(add_query_arg('share_error', 'invalid_user', home_url('/recipe-manager/')));
+                    exit;
+                }
+                
+                // Check if recipient is subscriber (allowed) or author with permissions
+                $is_admin = current_user_can('administrator');
+                $recipient_is_subscriber = in_array('subscriber', $recipient->roles);
+                $recipient_is_author = in_array('author', $recipient->roles) || in_array('editor', $recipient->roles);
+                
+                // If recipient is already an author, check if they've granted current user permission
+                if ($recipient_is_author && !$recipient_is_subscriber) {
+                    $has_permission = user_can_view_collection($current_user_id, $recipient_id);
+                    
+                    if (!$has_permission && !$is_admin) {
+                        // Not allowed to share with this author
+                        $redirect_url = home_url('/recipe-manager/?share_error=no_permission');
+                        if (!empty($_GET['collection'])) {
+                            $redirect_url .= '&collection=' . intval($_GET['collection']);
+                        }
+                        wp_redirect($redirect_url);
+                        exit;
+                    }
+                }
+                
+                // Track if recipient was promoted from subscriber
+                $recipient_was_promoted = false;
                 
                 foreach ($selected_ids as $original_id) {
                     $original = get_post($original_id);
                     
                     // Verify user can manage this recipe (owner, co-editor, or administrator)
-                    require_once(get_stylesheet_directory() . '/collection-permissions.php');
-                    $is_admin = current_user_can('administrator');
                     $can_share = $is_admin ||
-                                 ($original->post_author == get_current_user_id()) || 
-                                 user_can_manage_collection(get_current_user_id(), $original->post_author);
+                                 ($original->post_author == $current_user_id) || 
+                                 user_can_manage_collection($current_user_id, $original->post_author);
                     
                     if ($original && $can_share) {
-                        // Auto-promote subscriber to author if needed (Editors already have publish rights)
-                        $recipient = get_userdata($recipient_id);
-                        if ($recipient && in_array('subscriber', $recipient->roles)) {
+                        // Auto-promote subscriber to author if needed
+                        if ($recipient_is_subscriber) {
                             $recipient->set_role('author');
+                            $recipient_was_promoted = true;
+                            
+                            // CHANGE 2: Grant reciprocal viewer permission
+                            // New author automatically grants sharer "viewer" access
+                            grant_viewer_permission($recipient_id, $current_user_id);
                         }
+                        
                         // Check if recipient already has a recipe with this title
                         global $wpdb;
                         $existing = $wpdb->get_var($wpdb->prepare(
@@ -229,19 +256,16 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                             'post_title' => $original->post_title,
                             'post_type' => 'recipe',
                             'post_status' => 'publish',
-                            'post_author' => $recipient_id, // Assign to recipient
+                            'post_author' => $recipient_id,
                         );
                         
                         $new_id = wp_insert_post($new_post);
                         
                         if ($new_id) {
-                            // Copy meta (NOT _recipe_id - we'll generate a new unique one)
+                            // Copy meta
                             update_post_meta($new_id, '_recipe_ingredients', get_post_meta($original_id, '_recipe_ingredients', true));
                             update_post_meta($new_id, '_recipe_method', get_post_meta($original_id, '_recipe_method', true));
                             update_post_meta($new_id, '_recipe_notes', get_post_meta($original_id, '_recipe_notes', true));
-                            
-                            // Copy featured image
-                            copy_recipe_featured_image($original_id, $new_id);
                             
                             // Generate new unique recipe ID
                             $recipe_permanent_id = 'R' . str_pad($new_id, 4, '0', STR_PAD_LEFT);
@@ -272,7 +296,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                             if ($source_author_id != $recipient_id) {
                                 $source_author = get_userdata($source_author_id);
                                 if ($source_author) {
-                                    $author_category_name = $source_author->user_login; // Use username, not display name
+                                    $author_category_name = $source_author->user_login;
                                     
                                     // Check if recipient already has this author category
                                     $existing_author_cat = get_user_category_by_name($recipient_id, $author_category_name);
@@ -299,8 +323,11 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                     }
                 }
                 
-                // Redirect with success message and preserve collection view
+                // Redirect with success message
                 $redirect_url = home_url('/recipe-manager/?shared=' . $shared_count);
+                if ($recipient_was_promoted) {
+                    $redirect_url .= '&promoted_recipient=1';
+                }
                 if (!empty($_GET['collection'])) {
                     $redirect_url .= '&collection=' . intval($_GET['collection']);
                 }
