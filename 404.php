@@ -11,6 +11,7 @@ get_header();
         404
     </div>
     
+    
     <h1 style="font-size: 36px; color: #333; margin-bottom: 20px;">
         Oops! Recipe Not Found or page not found
     </h1>
