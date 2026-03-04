@@ -6,14 +6,13 @@
 get_header();
 ?>
 
-<div style="max-width: 800px; margin: 80px auto; padding: 60px 20px; text-align: center;">
-    <div style="font-size: 120px; font-weight: bold; color: #c84a31; margin-bottom: 20px;">
+<div style="max-width: 800px; margin: 80px auto 120px auto; padding: 60px 20px; text-align: center;">
+    <div style="font-size: 120px; font-weight: bold; color: #c84a31; margin-bottom: 20px; line-height: 1;">
         404
     </div>
     
-    
-    <h1 style="font-size: 36px; color: #333; margin-bottom: 20px;">
-        Oops! Recipe Not Found or page not found
+    <h1 style="font-size: 36px; color: #333; margin-bottom: 20px; margin-top: 20px;">
+        Oops! Recipe or page Not Found
     </h1>
     
     <p style="font-size: 18px; color: #666; margin-bottom: 40px;">
@@ -45,14 +44,7 @@ get_header();
         </div>
     </div>
     
-    <div style="margin-top: 40px;">
-        <img src="<?php echo get_stylesheet_directory_uri(); ?>/images/404-recipe.png" 
-             alt="Recipe not found" 
-             style="max-width: 300px; opacity: 0.7;"
-             onerror="this.style.display='none'">
-    </div>
-    
-    <p style="font-size: 14px; color: #999; margin-top: 40px;">
+    <p style="font-size: 14px; color: #999; margin-top: 60px; margin-bottom: 40px;">
         If you believe this is an error, please contact the site administrator.
     </p>
 </div>
