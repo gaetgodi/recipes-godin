@@ -12,7 +12,7 @@ get_header();
     </div>
     
     <h1 style="font-size: 36px; color: #333; margin-bottom: 20px; margin-top: 20px;">
-        Oops! Recipe or page Not Found
+        Oops! Recipe Not Found
     </h1>
     
     <p style="font-size: 18px; color: #666; margin-bottom: 40px;">
