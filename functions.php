@@ -137,6 +137,11 @@ add_action('template_redirect', function() {
         return;
     }
     
+    // Skip 404 pages (let them see the 404 message)
+    if (is_404()) {
+        return;
+    }
+    
     // Skip if user is logged in
     if (is_user_logged_in()) {
         return;
