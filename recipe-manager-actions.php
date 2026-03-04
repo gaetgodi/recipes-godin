@@ -10,58 +10,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-/**
- * Helper function to copy featured image from one recipe to another
- */
-function copy_recipe_featured_image($source_recipe_id, $target_recipe_id) {
-    $original_thumbnail_id = get_post_thumbnail_id($source_recipe_id);
-    
-    if (!$original_thumbnail_id) {
-        return false; // No image to copy
-    }
-    
-    // Get original file
-    $original_file = get_attached_file($original_thumbnail_id);
-    if (!$original_file || !file_exists($original_file)) {
-        return false;
-    }
-    
-    $upload_dir = wp_upload_dir();
-    $filename = basename($original_file);
-    $new_file = $upload_dir['path'] . '/' . wp_unique_filename($upload_dir['path'], $filename);
-    
-    // Copy the physical file
-    if (!copy($original_file, $new_file)) {
-        return false;
-    }
-    
-    // Create new attachment
-    $wp_filetype = wp_check_filetype($filename, null);
-    $attachment = array(
-        'post_mime_type' => $wp_filetype['type'],
-        'post_title' => sanitize_file_name(pathinfo($filename, PATHINFO_FILENAME)),
-        'post_content' => '',
-        'post_status' => 'inherit'
-    );
-    
-    $new_thumbnail_id = wp_insert_attachment($attachment, $new_file, $target_recipe_id);
-    
-    if (is_wp_error($new_thumbnail_id)) {
-        @unlink($new_file); // Clean up file if attachment creation failed
-        return false;
-    }
-    
-    // Generate metadata
-    require_once(ABSPATH . 'wp-admin/includes/image.php');
-    $attach_data = wp_generate_attachment_metadata($new_thumbnail_id, $new_file);
-    wp_update_attachment_metadata($new_thumbnail_id, $attach_data);
-    
-    // Set as featured image
-    set_post_thumbnail($target_recipe_id, $new_thumbnail_id);
-    
-    return true;
-}
-
+ 
 // Handle GET actions (like copy_recipe from links)
 if (isset($_GET['action'])) {
     $action = sanitize_text_field($_GET['action']);
