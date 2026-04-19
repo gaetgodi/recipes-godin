@@ -705,7 +705,7 @@ document.getElementById('recipeTextFile').addEventListener('change', function(e)
     reader.readAsText(file);
 });
 
-// Extract recipe from text (file or pasted)
+// Extract recipe from text (file or pasted) - does NOT translate
 function extractFromText() {
     const textContent = document.getElementById('pastedRecipeText').value.trim();
     
@@ -724,13 +724,11 @@ function extractFromText() {
     
     // Create FormData
     const formData = new FormData();
-    formData.append('action', 'translate_recipe');
-    formData.append('nonce', '<?php echo wp_create_nonce('recipe_translation'); ?>');
-    formData.append('title', '');
-    formData.append('ingredients', '');
-    formData.append('method', textContent);
+    formData.append('action', 'extract_recipe_from_text');
+    formData.append('nonce', '<?php echo wp_create_nonce('recipe_text_extract'); ?>');
+    formData.append('text_content', textContent);
     
-    // Use translation API to parse the text
+    // Use text extraction API (does NOT translate)
     fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
         method: 'POST',
         body: formData
@@ -739,17 +737,14 @@ function extractFromText() {
     .then(data => {
         if (data.success) {
             // Fill in the form fields
-            if (data.data.translated_data.title) {
-                document.getElementById('recipe_title').value = data.data.translated_data.title;
+            if (data.data.extracted_data.title) {
+                document.getElementById('recipe_title').value = data.data.extracted_data.title;
             }
-            if (data.data.translated_data.ingredients) {
-                document.getElementById('recipe_ingredients').value = data.data.translated_data.ingredients;
+            if (data.data.extracted_data.ingredients) {
+                document.getElementById('recipe_ingredients').value = data.data.extracted_data.ingredients;
             }
-            if (data.data.translated_data.method) {
-                // Auto-format method: split on periods
-                let method = data.data.translated_data.method;
-                method = method.replace(/\.\s+/g, '.\n');
-                document.getElementById('recipe_method').value = method.trim();
+            if (data.data.extracted_data.method) {
+                document.getElementById('recipe_method').value = data.data.extracted_data.method;
             }
             
             statusDiv.className = 'upload-status success';
@@ -758,7 +753,7 @@ function extractFromText() {
             // Put original text in notes
             document.getElementById('recipe_notes').value = 'ORIGINAL TEXT:\n\n' + textContent;
             
-            // Show translate button if text appears to be in another language
+            // Show translate button
             showTranslateButton();
         } else {
             statusDiv.className = 'upload-status error';
