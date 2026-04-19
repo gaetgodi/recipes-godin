@@ -2,7 +2,7 @@
 /**
  * Template Name: Recipe Editor
  * 
- * Frontend recipe add/edit interface with featured image OCR
+ * Frontend recipe add/edit interface with featured image OCR and text import
  */
 
 // Include the image upload handler
@@ -298,35 +298,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
     </div>
     <?php endif; ?>
     
-    <!-- Featured Image Upload Section -->
-    <div class="image-upload-section">
-        <h3>📸 Upload Featured Image</h3>
-        <p>Upload a photo of your recipe (handwritten recipe cards will be automatically extracted!)</p>
-        <p style="font-size: 13px; color: #666; margin-top: 5px;">
-            <strong>Accepted formats:</strong> JPG, PNG, GIF, WebP<br>
-            <strong>Maximum file size:</strong> 5 MB
-        </p>
-        
-        <input type="file" id="recipeImageFile" accept="image/*" style="display: none;" />
-        <button type="button" class="upload-btn" id="uploadImageBtn" onclick="document.getElementById('recipeImageFile').click();">
-            Choose Image
-        </button>
-        <button type="button" class="upload-btn" id="extractBtn" style="display: none; margin-left: 10px;">
-            Upload & Extract Recipe
-        </button>
-        
-        <div id="imagePreview" class="image-preview" style="display: none;">
-            <img id="previewImg" src="" alt="Recipe image preview" />
+    <!-- Import Options Tabs -->
+    <div style="margin-bottom: 30px;">
+        <div style="border-bottom: 2px solid #c84a31; margin-bottom: 20px;">
+            <button type="button" class="tab-btn active" onclick="switchTab('image')" id="imageTab">
+                📸 Import from Image
+            </button>
+            <button type="button" class="tab-btn" onclick="switchTab('text')" id="textTab">
+                📝 Import from Text
+            </button>
         </div>
         
-        <div id="uploadStatus" class="upload-status" style="display: none;"></div>
-        
-        <?php if ($featured_image_url): ?>
-        <div class="image-preview" style="display: block;">
-            <img src="<?php echo esc_url($featured_image_url); ?>" alt="Current featured image" />
-            <p style="font-size: 13px; color: #666; margin-top: 10px;">Current featured image</p>
+        <!-- Image Import Section -->
+        <div id="imageImport" class="import-section">
+            <div class="image-upload-section">
+                <h3>📸 Upload Featured Image</h3>
+                <p>Upload a photo of your recipe (handwritten recipe cards will be automatically extracted!)</p>
+                <p style="font-size: 13px; color: #666; margin-top: 5px;">
+                    <strong>Accepted formats:</strong> JPG, PNG, GIF, WebP<br>
+                    <strong>Maximum file size:</strong> 5 MB
+                </p>
+                
+                <input type="file" id="recipeImageFile" accept="image/*" style="display: none;" />
+                <button type="button" class="upload-btn" id="uploadImageBtn" onclick="document.getElementById('recipeImageFile').click();">
+                    Choose Image
+                </button>
+                <button type="button" class="upload-btn" id="extractBtn" style="display: none; margin-left: 10px;">
+                    Upload & Extract Recipe
+                </button>
+                
+                <div id="imagePreview" class="image-preview" style="display: none;">
+                    <img id="previewImg" src="" alt="Recipe image preview" />
+                </div>
+                
+                <div id="uploadStatus" class="upload-status" style="display: none;"></div>
+                
+                <?php if ($featured_image_url): ?>
+                <div class="image-preview" style="display: block;">
+                    <img src="<?php echo esc_url($featured_image_url); ?>" alt="Current featured image" />
+                    <p style="font-size: 13px; color: #666; margin-top: 10px;">Current featured image</p>
+                </div>
+                <?php endif; ?>
+            </div>
         </div>
-        <?php endif; ?>
+        
+        <!-- Text Import Section -->
+        <div id="textImport" class="import-section" style="display: none;">
+            <div class="text-import-section">
+                <h3>📝 Import Recipe from Text</h3>
+                <p>Import a recipe from a text file or paste recipe text directly</p>
+                
+                <div style="margin: 20px 0;">
+                    <h4 style="margin-bottom: 10px;">Option 1: Upload Text File</h4>
+                    <input type="file" id="recipeTextFile" accept=".txt" style="display: none;" />
+                    <button type="button" class="upload-btn" onclick="document.getElementById('recipeTextFile').click();">
+                        📄 Choose Text File (.txt)
+                    </button>
+                    <span id="textFileName" style="margin-left: 10px; color: #666;"></span>
+                </div>
+                
+                <div style="margin: 20px 0;">
+                    <h4 style="margin-bottom: 10px;">Option 2: Paste Recipe Text</h4>
+                    <textarea 
+                        id="pastedRecipeText" 
+                        placeholder="Paste your recipe here in any format...
+
+Example:
+Chocolate Chip Cookies
+
+Ingredients:
+2 cups flour
+1 cup sugar
+2 eggs
+1 cup chocolate chips
+
+Method:
+Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocolate chips. Bake for 12 minutes."
+                        style="width: 100%; min-height: 250px; padding: 15px; font-family: monospace; font-size: 14px; border: 2px solid #ddd; border-radius: 4px;"
+                    ></textarea>
+                </div>
+                
+                <button type="button" class="upload-btn" id="extractTextBtn" onclick="extractFromText()">
+                    🔍 Extract Recipe from Text
+                </button>
+                
+                <div id="textStatus" class="upload-status" style="display: none; margin-top: 15px;"></div>
+            </div>
+        </div>
     </div>
     
     <form method="post" class="editor-form" id="recipeForm">
@@ -463,7 +521,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
     </form>
 </div>
 
+<style>
+.tab-btn {
+    background: #f0f0f0;
+    border: none;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 6px 6px 0 0;
+    margin-right: 5px;
+    transition: all 0.3s;
+}
+
+.tab-btn:hover {
+    background: #e0e0e0;
+}
+
+.tab-btn.active {
+    background: #c84a31;
+    color: white;
+}
+
+.import-section {
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+</style>
+
 <script>
+// Tab switching
+function switchTab(tab) {
+    // Update tab buttons
+    document.getElementById('imageTab').classList.remove('active');
+    document.getElementById('textTab').classList.remove('active');
+    
+    if (tab === 'image') {
+        document.getElementById('imageTab').classList.add('active');
+        document.getElementById('imageImport').style.display = 'block';
+        document.getElementById('textImport').style.display = 'none';
+    } else {
+        document.getElementById('textTab').classList.add('active');
+        document.getElementById('imageImport').style.display = 'none';
+        document.getElementById('textImport').style.display = 'block';
+    }
+}
+
 // Image upload and OCR handling
 let selectedFile = null;
 
@@ -582,28 +689,120 @@ document.getElementById('extractBtn').addEventListener('click', function() {
     });
 });
 
+// Text file upload handling
+document.getElementById('recipeTextFile').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // Show filename
+    document.getElementById('textFileName').textContent = file.name;
+    
+    // Read file content
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('pastedRecipeText').value = e.target.result;
+    };
+    reader.readAsText(file);
+});
+
+// Extract recipe from text (file or pasted)
+function extractFromText() {
+    const textContent = document.getElementById('pastedRecipeText').value.trim();
+    
+    if (!textContent) {
+        alert('Please paste recipe text or upload a text file first');
+        return;
+    }
+    
+    const statusDiv = document.getElementById('textStatus');
+    const extractBtn = document.getElementById('extractTextBtn');
+    
+    statusDiv.className = 'upload-status processing';
+    statusDiv.textContent = '🔄 Extracting recipe from text...';
+    statusDiv.style.display = 'block';
+    extractBtn.disabled = true;
+    
+    // Create FormData
+    const formData = new FormData();
+    formData.append('action', 'translate_recipe');
+    formData.append('nonce', '<?php echo wp_create_nonce('recipe_translation'); ?>');
+    formData.append('title', '');
+    formData.append('ingredients', '');
+    formData.append('method', textContent);
+    
+    // Use translation API to parse the text
+    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Fill in the form fields
+            if (data.data.translated_data.title) {
+                document.getElementById('recipe_title').value = data.data.translated_data.title;
+            }
+            if (data.data.translated_data.ingredients) {
+                document.getElementById('recipe_ingredients').value = data.data.translated_data.ingredients;
+            }
+            if (data.data.translated_data.method) {
+                // Auto-format method: split on periods
+                let method = data.data.translated_data.method;
+                method = method.replace(/\.\s+/g, '.\n');
+                document.getElementById('recipe_method').value = method.trim();
+            }
+            
+            statusDiv.className = 'upload-status success';
+            statusDiv.textContent = '✅ Recipe extracted from text! Check the fields below.';
+            
+            // Put original text in notes
+            document.getElementById('recipe_notes').value = 'ORIGINAL TEXT:\n\n' + textContent;
+            
+            // Show translate button if text appears to be in another language
+            showTranslateButton();
+        } else {
+            statusDiv.className = 'upload-status error';
+            statusDiv.textContent = '❌ Extraction failed: ' + (data.data ? data.data.message : 'Unknown error');
+        }
+        
+        extractBtn.disabled = false;
+    })
+    .catch(error => {
+        statusDiv.className = 'upload-status error';
+        statusDiv.textContent = '❌ Extraction failed: ' + error.message;
+        extractBtn.disabled = false;
+    });
+}
+
 // Show translate button after successful extraction
 function showTranslateButton() {
-    const statusDiv = document.getElementById('uploadStatus');
+    // Check if button already exists
+    if (document.getElementById('translateBtn')) return;
     
-    // Add translate button if not already present
-    if (!document.getElementById('translateBtn')) {
-        const translateBtn = document.createElement('button');
-        translateBtn.type = 'button';
-        translateBtn.id = 'translateBtn';
-        translateBtn.className = 'upload-btn';
-        translateBtn.textContent = '🌐 Translate to English';
-        translateBtn.style.marginTop = '10px';
-        translateBtn.onclick = translateRecipe;
-        
-        statusDiv.parentNode.insertBefore(translateBtn, statusDiv.nextSibling);
-    }
+    // Determine which status div to use
+    const imageStatus = document.getElementById('uploadStatus');
+    const textStatus = document.getElementById('textStatus');
+    const statusDiv = imageStatus.style.display !== 'none' ? imageStatus : textStatus;
+    
+    const translateBtn = document.createElement('button');
+    translateBtn.type = 'button';
+    translateBtn.id = 'translateBtn';
+    translateBtn.className = 'upload-btn';
+    translateBtn.textContent = '🌐 Translate to English';
+    translateBtn.style.marginTop = '10px';
+    translateBtn.onclick = translateRecipe;
+    
+    statusDiv.parentNode.insertBefore(translateBtn, statusDiv.nextSibling);
 }
 
 // Translate the extracted recipe to English
 function translateRecipe() {
     const translateBtn = document.getElementById('translateBtn');
-    const statusDiv = document.getElementById('uploadStatus');
+    
+    // Determine which status div to use
+    const imageStatus = document.getElementById('uploadStatus');
+    const textStatus = document.getElementById('textStatus');
+    const statusDiv = imageStatus.style.display !== 'none' ? imageStatus : textStatus;
     
     // Disable button
     translateBtn.disabled = true;
@@ -640,7 +839,6 @@ function translateRecipe() {
             if (data.data.translated_data.method) {
                 // Auto-format method: split on periods to create line breaks
                 let method = data.data.translated_data.method;
-                // Split on period followed by space or newline, then rejoin with newlines
                 method = method.replace(/\.\s+/g, '.\n');
                 document.getElementById('recipe_method').value = method.trim();
             }
@@ -664,6 +862,49 @@ function translateRecipe() {
         translateBtn.textContent = '🌐 Translate to English';
     });
 }
+
+<?php if ($is_editing): ?>
+// When editing existing recipe, show translate button if fields are populated
+document.addEventListener('DOMContentLoaded', function() {
+    const title = document.getElementById('recipe_title').value;
+    const ingredients = document.getElementById('recipe_ingredients').value;
+    const method = document.getElementById('recipe_method').value;
+    
+    // Only show if there's actual content to translate
+    if (title || ingredients || method) {
+        // Create a status div for edit mode if it doesn't exist
+        if (!document.getElementById('editTranslateStatus')) {
+            const statusDiv = document.createElement('div');
+            statusDiv.id = 'editTranslateStatus';
+            statusDiv.className = 'upload-status';
+            statusDiv.style.display = 'none';
+            
+            // Insert before the form
+            const form = document.getElementById('recipeForm');
+            form.parentNode.insertBefore(statusDiv, form);
+        }
+        
+        // Show translate button for editing
+        const formActions = document.querySelector('.form-actions');
+        if (formActions && !document.getElementById('translateBtn')) {
+            const translateBtn = document.createElement('button');
+            translateBtn.type = 'button';
+            translateBtn.id = 'translateBtn';
+            translateBtn.className = 'btn btn-secondary';
+            translateBtn.textContent = '🌐 Translate to English';
+            translateBtn.onclick = function() {
+                // Use the edit translate status div
+                const statusDiv = document.getElementById('editTranslateStatus');
+                statusDiv.style.display = 'block';
+                translateRecipe();
+            };
+            
+            // Insert before the first button
+            formActions.insertBefore(translateBtn, formActions.firstChild);
+        }
+    }
+});
+<?php endif; ?>
 </script>
 
 <?php get_footer(); ?>
