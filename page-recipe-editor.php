@@ -769,30 +769,68 @@ function extractFromText() {
     });
 }
 
-// Show translate button after successful extraction
+// Show translate button with language selector after successful extraction
 function showTranslateButton() {
     // Check if button already exists
-    if (document.getElementById('translateBtn')) return;
+    if (document.getElementById('translateContainer')) return;
     
     // Determine which status div to use
     const imageStatus = document.getElementById('uploadStatus');
     const textStatus = document.getElementById('textStatus');
     const statusDiv = imageStatus.style.display !== 'none' ? imageStatus : textStatus;
     
+    // Create container for translate controls
+    const translateContainer = document.createElement('div');
+    translateContainer.id = 'translateContainer';
+    translateContainer.style.marginTop = '10px';
+    translateContainer.style.display = 'flex';
+    translateContainer.style.gap = '10px';
+    translateContainer.style.alignItems = 'center';
+    
+    // Create language selector
+    const langSelect = document.createElement('select');
+    langSelect.id = 'targetLanguage';
+    langSelect.className = 'upload-btn';
+    langSelect.style.padding = '8px 12px';
+    langSelect.innerHTML = `
+        <option value="English">🇬🇧 English</option>
+        <option value="French">🇫🇷 French</option>
+        <option value="Spanish">🇪🇸 Spanish</option>
+        <option value="Italian">🇮🇹 Italian</option>
+        <option value="German">🇩🇪 German</option>
+        <option value="Portuguese">🇵🇹 Portuguese</option>
+        <option value="Gujarati">🇮🇳 Gujarati</option>
+        <option value="Hindi">🇮🇳 Hindi</option>
+        <option value="Mandarin Chinese">🇨🇳 Mandarin</option>
+        <option value="Japanese">🇯🇵 Japanese</option>
+        <option value="Korean">🇰🇷 Korean</option>
+        <option value="Arabic">🇸🇦 Arabic</option>
+        <option value="Russian">🇷🇺 Russian</option>
+        <option value="Dutch">🇳🇱 Dutch</option>
+        <option value="Polish">🇵🇱 Polish</option>
+        <option value="Turkish">🇹🇷 Turkish</option>
+        <option value="Vietnamese">🇻🇳 Vietnamese</option>
+        <option value="Thai">🇹🇭 Thai</option>
+    `;
+    
+    // Create translate button
     const translateBtn = document.createElement('button');
     translateBtn.type = 'button';
     translateBtn.id = 'translateBtn';
     translateBtn.className = 'upload-btn';
-    translateBtn.textContent = '🌐 Translate to English';
-    translateBtn.style.marginTop = '10px';
+    translateBtn.textContent = '🌐 Translate';
     translateBtn.onclick = translateRecipe;
     
-    statusDiv.parentNode.insertBefore(translateBtn, statusDiv.nextSibling);
+    translateContainer.appendChild(langSelect);
+    translateContainer.appendChild(translateBtn);
+    
+    statusDiv.parentNode.insertBefore(translateContainer, statusDiv.nextSibling);
 }
 
-// Translate the extracted recipe to English
+// Translate the extracted recipe to selected language
 function translateRecipe() {
     const translateBtn = document.getElementById('translateBtn');
+    const targetLang = document.getElementById('targetLanguage').value;
     
     // Determine which status div to use
     const imageStatus = document.getElementById('uploadStatus');
@@ -815,6 +853,7 @@ function translateRecipe() {
     formData.append('title', title);
     formData.append('ingredients', ingredients);
     formData.append('method', method);
+    formData.append('target_language', targetLang);
     
     // Call translation AJAX
     fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
@@ -839,22 +878,22 @@ function translateRecipe() {
             }
             
             statusDiv.className = 'upload-status success';
-            statusDiv.textContent = '✅ Recipe translated to English!';
+            statusDiv.textContent = '✅ Recipe translated to ' + targetLang + '!';
             
-            // Remove translate button
-            translateBtn.remove();
+            // Remove translate container
+            document.getElementById('translateContainer').remove();
         } else {
             statusDiv.className = 'upload-status error';
             statusDiv.textContent = '❌ Translation failed: ' + (data.data ? data.data.message : 'Unknown error');
             translateBtn.disabled = false;
-            translateBtn.textContent = '🌐 Translate to English';
+            translateBtn.textContent = '🌐 Translate';
         }
     })
     .catch(error => {
         statusDiv.className = 'upload-status error';
         statusDiv.textContent = '❌ Translation failed: ' + error.message;
         translateBtn.disabled = false;
-        translateBtn.textContent = '🌐 Translate to English';
+        translateBtn.textContent = '🌐 Translate';
     });
 }
 
@@ -879,23 +918,106 @@ document.addEventListener('DOMContentLoaded', function() {
             form.parentNode.insertBefore(statusDiv, form);
         }
         
-        // Show translate button for editing
+        // Show translate controls for editing
         const formActions = document.querySelector('.form-actions');
-        if (formActions && !document.getElementById('translateBtn')) {
+        if (formActions && !document.getElementById('editTranslateContainer')) {
+            const translateContainer = document.createElement('div');
+            translateContainer.id = 'editTranslateContainer';
+            translateContainer.style.display = 'flex';
+            translateContainer.style.gap = '10px';
+            translateContainer.style.alignItems = 'center';
+            translateContainer.style.marginBottom = '10px';
+            
+            const langSelect = document.createElement('select');
+            langSelect.id = 'editTargetLanguage';
+            langSelect.className = 'btn btn-secondary';
+            langSelect.style.padding = '8px 12px';
+            langSelect.innerHTML = `
+                <option value="English">🇬🇧 English</option>
+                <option value="French">🇫🇷 French</option>
+                <option value="Spanish">🇪🇸 Spanish</option>
+                <option value="Italian">🇮🇹 Italian</option>
+                <option value="German">🇩🇪 German</option>
+                <option value="Portuguese">🇵🇹 Portuguese</option>
+                <option value="Gujarati">🇮🇳 Gujarati</option>
+                <option value="Hindi">🇮🇳 Hindi</option>
+                <option value="Mandarin Chinese">🇨🇳 Mandarin</option>
+                <option value="Japanese">🇯🇵 Japanese</option>
+                <option value="Korean">🇰🇷 Korean</option>
+                <option value="Arabic">🇸🇦 Arabic</option>
+                <option value="Russian">🇷🇺 Russian</option>
+                <option value="Dutch">🇳🇱 Dutch</option>
+                <option value="Polish">🇵🇱 Polish</option>
+                <option value="Turkish">🇹🇷 Turkish</option>
+                <option value="Vietnamese">🇻🇳 Vietnamese</option>
+                <option value="Thai">🇹🇭 Thai</option>
+            `;
+            
             const translateBtn = document.createElement('button');
             translateBtn.type = 'button';
-            translateBtn.id = 'translateBtn';
             translateBtn.className = 'btn btn-secondary';
-            translateBtn.textContent = '🌐 Translate to English';
+            translateBtn.textContent = '🌐 Translate Recipe';
             translateBtn.onclick = function() {
-                // Use the edit translate status div
                 const statusDiv = document.getElementById('editTranslateStatus');
                 statusDiv.style.display = 'block';
-                translateRecipe();
+                
+                const targetLang = document.getElementById('editTargetLanguage').value;
+                const title = document.getElementById('recipe_title').value;
+                const ingredients = document.getElementById('recipe_ingredients').value;
+                const method = document.getElementById('recipe_method').value;
+                
+                translateBtn.disabled = true;
+                translateBtn.textContent = '🔄 Translating...';
+                
+                const formData = new FormData();
+                formData.append('action', 'translate_recipe');
+                formData.append('nonce', '<?php echo wp_create_nonce('recipe_translation'); ?>');
+                formData.append('title', title);
+                formData.append('ingredients', ingredients);
+                formData.append('method', method);
+                formData.append('target_language', targetLang);
+                
+                fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.data.translated_data.title) {
+                            document.getElementById('recipe_title').value = data.data.translated_data.title;
+                        }
+                        if (data.data.translated_data.ingredients) {
+                            document.getElementById('recipe_ingredients').value = data.data.translated_data.ingredients;
+                        }
+                        if (data.data.translated_data.method) {
+                            let method = data.data.translated_data.method;
+                            method = method.replace(/\.\s+/g, '.\n');
+                            document.getElementById('recipe_method').value = method.trim();
+                        }
+                        
+                        statusDiv.className = 'upload-status success';
+                        statusDiv.textContent = '✅ Recipe translated to ' + targetLang + '!';
+                        translateBtn.disabled = false;
+                        translateBtn.textContent = '🌐 Translate Recipe';
+                    } else {
+                        statusDiv.className = 'upload-status error';
+                        statusDiv.textContent = '❌ Translation failed: ' + (data.data ? data.data.message : 'Unknown error');
+                        translateBtn.disabled = false;
+                        translateBtn.textContent = '🌐 Translate Recipe';
+                    }
+                })
+                .catch(error => {
+                    statusDiv.className = 'upload-status error';
+                    statusDiv.textContent = '❌ Translation failed: ' + error.message;
+                    translateBtn.disabled = false;
+                    translateBtn.textContent = '🌐 Translate Recipe';
+                });
             };
             
-            // Insert before the first button
-            formActions.insertBefore(translateBtn, formActions.firstChild);
+            translateContainer.appendChild(langSelect);
+            translateContainer.appendChild(translateBtn);
+            formActions.parentNode.insertBefore(translateContainer, formActions);
         }
     }
 });
