@@ -240,9 +240,9 @@ function parse_recipe_extraction($text) {
 }
 
 /**
- * Translate extracted recipe text to English using Claude API
+ * Translate extracted recipe text to any language using Claude API
  */
-function translate_recipe_to_english($title, $ingredients, $method) {
+function translate_recipe_to_language($title, $ingredients, $method, $target_language = 'English') {
     // Get API key from wp-config.php
     if (!defined('ANTHROPIC_API_KEY') || ANTHROPIC_API_KEY === 'YOUR_KEY_GOES_HERE_WHEN_READY') {
         return array(
@@ -262,7 +262,7 @@ function translate_recipe_to_english($title, $ingredients, $method) {
         'messages' => array(
             array(
                 'role' => 'user',
-                'content' => "Please translate this recipe to English. Maintain the exact same format (TITLE:, INGREDIENTS:, METHOD:). If it's already in English, just return it as-is.\n\n" . $text_to_translate
+                'content' => "Please translate this recipe to $target_language. Maintain the exact same format (TITLE:, INGREDIENTS:, METHOD:). If it's already in $target_language, just return it as-is.\n\n" . $text_to_translate
             )
         )
     );
@@ -316,7 +316,7 @@ function translate_recipe_to_english($title, $ingredients, $method) {
 }
 
 /**
- * AJAX Handler: Translate recipe text to English
+ * AJAX Handler: Translate recipe text to any language
  */
 add_action('wp_ajax_translate_recipe', 'handle_recipe_translation');
 
@@ -332,13 +332,14 @@ function handle_recipe_translation() {
     $title = isset($_POST['title']) ? sanitize_text_field($_POST['title']) : '';
     $ingredients = isset($_POST['ingredients']) ? sanitize_textarea_field($_POST['ingredients']) : '';
     $method = isset($_POST['method']) ? sanitize_textarea_field($_POST['method']) : '';
+    $target_language = isset($_POST['target_language']) ? sanitize_text_field($_POST['target_language']) : 'English';
     
     if (empty($title) && empty($ingredients) && empty($method)) {
         wp_send_json_error(array('message' => 'No text to translate'));
     }
     
-    // Call translation function
-    $result = translate_recipe_to_english($title, $ingredients, $method);
+    // Call translation function with target language
+    $result = translate_recipe_to_language($title, $ingredients, $method, $target_language);
     
     if ($result['success']) {
         wp_send_json_success(array(
@@ -436,7 +437,8 @@ Here is the text:
         wp_send_json_error(array('message' => 'No response from Claude API'));
     }
     
-    $extracted_text = $data['content'][0]['text'];    
+    $extracted_text = $data['content'][0]['text'];
+    
     // Parse the response using existing parser
     $parsed = parse_recipe_extraction($extracted_text);
     
