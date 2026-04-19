@@ -238,6 +238,7 @@ function parse_recipe_extraction($text) {
     
     return $result;
 }
+
 /**
  * Translate extracted recipe text to English using Claude API
  */
@@ -313,6 +314,7 @@ function translate_recipe_to_english($title, $ingredients, $method) {
         'data' => $parsed
     );
 }
+
 /**
  * AJAX Handler: Translate recipe text to English
  */
@@ -347,4 +349,99 @@ function handle_recipe_translation() {
             'message' => $result['error']
         ));
     }
+}
+
+/**
+ * AJAX Handler: Extract recipe from plain text
+ */
+add_action('wp_ajax_extract_recipe_from_text', 'handle_text_recipe_extraction');
+
+function handle_text_recipe_extraction() {
+    // Verify nonce
+    check_ajax_referer('recipe_text_extract', 'nonce');
+    
+    // Check permissions
+    if (!current_user_can('edit_posts')) {
+        wp_send_json_error(array('message' => 'Permission denied'));
+    }
+    
+    $text_content = isset($_POST['text_content']) ? sanitize_textarea_field($_POST['text_content']) : '';
+    
+    if (empty($text_content)) {
+        wp_send_json_error(array('message' => 'No text provided'));
+    }
+    
+    // Get API key from wp-config.php
+    if (!defined('ANTHROPIC_API_KEY') || ANTHROPIC_API_KEY === 'YOUR_KEY_GOES_HERE_WHEN_READY') {
+        wp_send_json_error(array('message' => 'Anthropic API key not configured'));
+    }
+    
+    $api_key = ANTHROPIC_API_KEY;
+    
+    // Prepare the API request to extract recipe from text
+    $request_body = array(
+        'model' => 'claude-sonnet-4-20250514',
+        'max_tokens' => 2000,
+        'messages' => array(
+            array(
+                'role' => 'user',
+                'content' => 'Please extract the recipe from this text. Parse it into structured format:
+
+TITLE: [recipe title or "Untitled Recipe" if not visible]
+
+INGREDIENTS:
+[ingredient 1]
+[ingredient 2]
+[etc.]
+
+METHOD:
+[step 1]
+[step 2]
+[etc.]
+
+Do NOT translate the text - keep it in the original language. Just extract and structure it.
+
+Here is the text:
+
+' . $text_content
+            )
+        )
+    );
+    
+    // Make API request
+    $response = wp_remote_post('https://api.anthropic.com/v1/messages', array(
+        'timeout' => 30,
+        'headers' => array(
+            'Content-Type' => 'application/json',
+            'x-api-key' => $api_key,
+            'anthropic-version' => '2023-06-01'
+        ),
+        'body' => json_encode($request_body)
+    ));
+    
+    if (is_wp_error($response)) {
+        wp_send_json_error(array('message' => 'API request failed: ' . $response->get_error_message()));
+    }
+    
+    $body = wp_remote_retrieve_body($response);
+    $http_code = wp_remote_retrieve_response_code($response);
+    $data = json_decode($body, true);
+    
+    if ($http_code !== 200) {
+        $error_msg = isset($data['error']['message']) ? $data['error']['message'] : 'HTTP ' . $http_code;
+        wp_send_json_error(array('message' => 'API Error: ' . $error_msg));
+    }
+    
+    if (empty($data['content'][0]['text'])) {
+        wp_send_json_error(array('message' => 'No response from Claude API'));
+    }
+    
+    $extracted_text = $data['content'][0]['text'];    
+    // Parse the response using existing parser
+    $parsed = parse_recipe_extraction($extracted_text);
+    
+    wp_send_json_success(array(
+        'extracted_data' => $parsed,
+        'raw_response' => $extracted_text
+    ));
 }
