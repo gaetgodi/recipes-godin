@@ -638,7 +638,11 @@ function translateRecipe() {
                 document.getElementById('recipe_ingredients').value = data.data.translated_data.ingredients;
             }
             if (data.data.translated_data.method) {
-                document.getElementById('recipe_method').value = data.data.translated_data.method;
+                // Auto-format method: split on periods to create line breaks
+                let method = data.data.translated_data.method;
+                // Split on period followed by space or newline, then rejoin with newlines
+                method = method.replace(/\.\s+/g, '.\n');
+                document.getElementById('recipe_method').value = method.trim();
             }
             
             statusDiv.className = 'upload-status success';
