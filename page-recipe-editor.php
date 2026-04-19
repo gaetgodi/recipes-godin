@@ -226,15 +226,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
             update_post_meta($saved_id, '_recipe_notes', $notes);
             
             // Set featured image if one was uploaded
-if ($new_featured_image_id > 0) {
-    set_post_thumbnail($saved_id, $new_featured_image_id);
-    
-    // Also update the attachment's post parent to link it to this recipe
-    wp_update_post(array(
-        'ID' => $new_featured_image_id,
-        'post_parent' => $saved_id
-    ));
-}
+            if ($new_featured_image_id > 0) {
+                set_post_thumbnail($saved_id, $new_featured_image_id);
+                
+                // Also update the attachment's post parent to link it to this recipe
+                wp_update_post(array(
+                    'ID' => $new_featured_image_id,
+                    'post_parent' => $saved_id
+                ));
+            }
             
             if (!empty($categories)) {
                 set_recipe_categories($saved_id, $categories);
@@ -533,6 +533,7 @@ document.getElementById('extractBtn').addEventListener('click', function() {
         console.log('Full API Response:', data);
         
         if (data.success) {
+            // Update status
             statusDiv.className = 'upload-status success';
             
             if (data.data.extracted_data.found === false) {
@@ -541,6 +542,7 @@ document.getElementById('extractBtn').addEventListener('click', function() {
             } else {
                 statusDiv.textContent = '✅ Image uploaded and recipe extracted! Check the fields below.';
                 
+                // Fill in the form fields
                 if (data.data.extracted_data.title) {
                     document.getElementById('recipe_title').value = data.data.extracted_data.title;
                 }
@@ -551,9 +553,14 @@ document.getElementById('extractBtn').addEventListener('click', function() {
                     document.getElementById('recipe_method').value = data.data.extracted_data.method;
                 }
                 
+                // Put raw extraction in notes
                 document.getElementById('recipe_notes').value = 'RAW EXTRACTION:\n\n' + data.data.raw_response;
+                
+                // Show translate button
+                showTranslateButton();
             }
             
+            // Store featured image ID
             document.getElementById('featuredImageId').value = data.data.attachment_id;
             
         } else {
@@ -574,6 +581,85 @@ document.getElementById('extractBtn').addEventListener('click', function() {
         document.getElementById('uploadImageBtn').disabled = false;
     });
 });
+
+// Show translate button after successful extraction
+function showTranslateButton() {
+    const statusDiv = document.getElementById('uploadStatus');
+    
+    // Add translate button if not already present
+    if (!document.getElementById('translateBtn')) {
+        const translateBtn = document.createElement('button');
+        translateBtn.type = 'button';
+        translateBtn.id = 'translateBtn';
+        translateBtn.className = 'upload-btn';
+        translateBtn.textContent = '🌐 Translate to English';
+        translateBtn.style.marginTop = '10px';
+        translateBtn.onclick = translateRecipe;
+        
+        statusDiv.parentNode.insertBefore(translateBtn, statusDiv.nextSibling);
+    }
+}
+
+// Translate the extracted recipe to English
+function translateRecipe() {
+    const translateBtn = document.getElementById('translateBtn');
+    const statusDiv = document.getElementById('uploadStatus');
+    
+    // Disable button
+    translateBtn.disabled = true;
+    translateBtn.textContent = '🔄 Translating...';
+    
+    // Get current field values
+    const title = document.getElementById('recipe_title').value;
+    const ingredients = document.getElementById('recipe_ingredients').value;
+    const method = document.getElementById('recipe_method').value;
+    
+    // Create FormData
+    const formData = new FormData();
+    formData.append('action', 'translate_recipe');
+    formData.append('nonce', '<?php echo wp_create_nonce('recipe_translation'); ?>');
+    formData.append('title', title);
+    formData.append('ingredients', ingredients);
+    formData.append('method', method);
+    
+    // Call translation AJAX
+    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update fields with translated text
+            if (data.data.translated_data.title) {
+                document.getElementById('recipe_title').value = data.data.translated_data.title;
+            }
+            if (data.data.translated_data.ingredients) {
+                document.getElementById('recipe_ingredients').value = data.data.translated_data.ingredients;
+            }
+            if (data.data.translated_data.method) {
+                document.getElementById('recipe_method').value = data.data.translated_data.method;
+            }
+            
+            statusDiv.className = 'upload-status success';
+            statusDiv.textContent = '✅ Recipe translated to English!';
+            
+            // Remove translate button
+            translateBtn.remove();
+        } else {
+            statusDiv.className = 'upload-status error';
+            statusDiv.textContent = '❌ Translation failed: ' + (data.data ? data.data.message : 'Unknown error');
+            translateBtn.disabled = false;
+            translateBtn.textContent = '🌐 Translate to English';
+        }
+    })
+    .catch(error => {
+        statusDiv.className = 'upload-status error';
+        statusDiv.textContent = '❌ Translation failed: ' + error.message;
+        translateBtn.disabled = false;
+        translateBtn.textContent = '🌐 Translate to English';
+    });
+}
 </script>
 
 <?php get_footer(); ?>

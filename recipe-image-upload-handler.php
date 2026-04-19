@@ -238,3 +238,113 @@ function parse_recipe_extraction($text) {
     
     return $result;
 }
+/**
+ * Translate extracted recipe text to English using Claude API
+ */
+function translate_recipe_to_english($title, $ingredients, $method) {
+    // Get API key from wp-config.php
+    if (!defined('ANTHROPIC_API_KEY') || ANTHROPIC_API_KEY === 'YOUR_KEY_GOES_HERE_WHEN_READY') {
+        return array(
+            'success' => false,
+            'error' => 'Anthropic API key not configured'
+        );
+    }
+    
+    $api_key = ANTHROPIC_API_KEY;
+    
+    // Prepare the translation request
+    $text_to_translate = "TITLE: $title\n\nINGREDIENTS:\n$ingredients\n\nMETHOD:\n$method";
+    
+    $request_body = array(
+        'model' => 'claude-sonnet-4-20250514',
+        'max_tokens' => 2000,
+        'messages' => array(
+            array(
+                'role' => 'user',
+                'content' => "Please translate this recipe to English. Maintain the exact same format (TITLE:, INGREDIENTS:, METHOD:). If it's already in English, just return it as-is.\n\n" . $text_to_translate
+            )
+        )
+    );
+    
+    // Make API request
+    $response = wp_remote_post('https://api.anthropic.com/v1/messages', array(
+        'timeout' => 30,
+        'headers' => array(
+            'Content-Type' => 'application/json',
+            'x-api-key' => $api_key,
+            'anthropic-version' => '2023-06-01'
+        ),
+        'body' => json_encode($request_body)
+    ));
+    
+    if (is_wp_error($response)) {
+        return array(
+            'success' => false,
+            'error' => 'Translation request failed: ' . $response->get_error_message()
+        );
+    }
+    
+    $body = wp_remote_retrieve_body($response);
+    $http_code = wp_remote_retrieve_response_code($response);
+    $data = json_decode($body, true);
+    
+    if ($http_code !== 200) {
+        $error_msg = isset($data['error']['message']) ? $data['error']['message'] : 'HTTP ' . $http_code;
+        return array(
+            'success' => false,
+            'error' => 'Translation API Error: ' . $error_msg
+        );
+    }
+    
+    if (empty($data['content'][0]['text'])) {
+        return array(
+            'success' => false,
+            'error' => 'No translation response received'
+        );
+    }
+    
+    $translated_text = $data['content'][0]['text'];
+    
+    // Parse the translated response
+    $parsed = parse_recipe_extraction($translated_text);
+    
+    return array(
+        'success' => true,
+        'data' => $parsed
+    );
+}
+/**
+ * AJAX Handler: Translate recipe text to English
+ */
+add_action('wp_ajax_translate_recipe', 'handle_recipe_translation');
+
+function handle_recipe_translation() {
+    // Verify nonce
+    check_ajax_referer('recipe_translation', 'nonce');
+    
+    // Check permissions
+    if (!current_user_can('edit_posts')) {
+        wp_send_json_error(array('message' => 'Permission denied'));
+    }
+    
+    $title = isset($_POST['title']) ? sanitize_text_field($_POST['title']) : '';
+    $ingredients = isset($_POST['ingredients']) ? sanitize_textarea_field($_POST['ingredients']) : '';
+    $method = isset($_POST['method']) ? sanitize_textarea_field($_POST['method']) : '';
+    
+    if (empty($title) && empty($ingredients) && empty($method)) {
+        wp_send_json_error(array('message' => 'No text to translate'));
+    }
+    
+    // Call translation function
+    $result = translate_recipe_to_english($title, $ingredients, $method);
+    
+    if ($result['success']) {
+        wp_send_json_success(array(
+            'translated_data' => $result['data']
+        ));
+    } else {
+        wp_send_json_error(array(
+            'message' => $result['error']
+        ));
+    }
+}
