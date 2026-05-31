@@ -4,8 +4,10 @@
  *
  * Complete recipe management interface with filtering, bulk actions, and printing
  *
- * @version 2.1.0
+ * @version 2.1.1
  * @changelog
+ *   2.1.1 - Share button now visible to all logged-in users viewing their own collection,
+ *            not just users with edit_posts capability. Fixes subscriber sharing.
  *   2.1.0 - Share recipient list now includes authors who are in YOUR viewers list,
  *            not just authors whose viewers list you are on. Bidirectional sharing.
  *   2.0.0 - Added data-label attributes to all <td> elements for mobile card layout.
@@ -324,14 +326,16 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                 📋 Copy
             </button>
             
-            <button type="button" class="action-btn" style="background: #7c3aed; color: white;" id="shareBtnTop" disabled
-                    onclick="openShareDialog()">
-                🔗 Share
-            </button>
-            
             <button type="submit" name="bulk_action" value="delete" class="action-btn btn-delete" id="deleteBtnTop" disabled
                     onclick="return confirm('Are you sure you want to delete the selected recipes? This cannot be undone.')">
                 🗑️ Delete
+            </button>
+            <?php endif; ?>
+
+            <?php if (is_user_logged_in() && $selected_collection == $current_user_id): ?>
+            <button type="button" class="action-btn" style="background: #7c3aed; color: white;" id="shareBtnTop" disabled
+                    onclick="openShareDialog()">
+                🔗 Share
             </button>
             <?php endif; ?>
         </div>
@@ -422,14 +426,16 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                 📋 Copy
             </button>
             
-            <button type="button" class="action-btn" style="background: #7c3aed; color: white;" id="shareBtn" disabled
-                    onclick="openShareDialog()">
-                🔗 Share
-            </button>
-            
             <button type="submit" name="bulk_action" value="delete" class="action-btn btn-delete" id="deleteBtn" disabled
                     onclick="return confirm('Are you sure you want to delete the selected recipes? This cannot be undone.')">
                 🗑️ Delete
+            </button>
+            <?php endif; ?>
+
+            <?php if (is_user_logged_in() && $selected_collection == $current_user_id): ?>
+            <button type="button" class="action-btn" style="background: #7c3aed; color: white;" id="shareBtn" disabled
+                    onclick="openShareDialog()">
+                🔗 Share
             </button>
             <?php endif; ?>
             
