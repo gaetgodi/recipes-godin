@@ -2,8 +2,10 @@
 /**
  * Recipe Collection Permissions System
  *
- * @version 2.1.0
+ * @version 2.1.1
  * @changelog
+ *   2.1.1 - Reverted get_accessible_collections() to single-direction viewer check.
+ *            Bidirectional logic belongs only in share recipient list and action check.
  *   2.1.0 - get_accessible_collections() now uses bidirectional viewer check,
  *            so collections are visible when either party has granted viewer access.
  *   1.0.0 - Initial release.
@@ -281,10 +283,9 @@ function get_accessible_collections($user_id = null) {
             continue;
         }
         
-        // Bidirectional: accessible if either user can view the other's collection
+        // Single direction: accessible only if user was explicitly granted access
         if ($is_admin ||
-            user_can_view_collection($user_id, $author->ID) ||
-            user_can_view_collection($author->ID, $user_id)) {
+            user_can_view_collection($user_id, $author->ID)) {
             $collections[] = array(
                 'owner_id' => $author->ID,
                 'owner_name' => $author->display_name,
