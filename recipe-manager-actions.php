@@ -4,8 +4,10 @@
  *
  * Handles all GET and POST actions for recipe management
  *
- * @version 2.1.2
+ * @version 2.1.3
  * @changelog
+ *   2.1.3 - Grant reciprocal viewer permission when sharing with an existing author,
+ *            so sharer appears in recipient's collection dropdown going forward.
  *   2.1.2 - Fixed share permission check for existing authors: now bidirectional,
  *            matching the recipient list logic. Fixes silent no_permission redirect.
  *   2.1.1 - Fixed share action gate: subscribers can now execute shares (was blocked by edit_posts check).
@@ -200,6 +202,9 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                         wp_redirect($redirect_url);
                         exit;
                     }
+                    
+                    // Grant reciprocal viewer access so both parties can see each other's collections
+                    grant_viewer_permission($recipient_id, $current_user_id);
                 }
                 
                 $recipient_was_promoted = false;

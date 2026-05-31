@@ -1,22 +1,18 @@
 <?php
 /**
  * Template Name: Recipe View Page
- *
+ * 
  * Screen-optimized view for selected recipes
- *
- * @version 2.1.0
- * @changelog
- *   2.1.0 - Edit button now checks user_can_manage_collection() in addition to edit_posts,
- *            so viewers of other collections no longer see an Edit button they can't use.
- *   1.0.0 - Initial release.
  */
 
 // Get selected recipes - try URL first, then transient
 $recipe_ids = array();
 
 if (!empty($_GET['ids'])) {
+    // Get from URL parameter
     $recipe_ids = array_map('intval', explode(',', $_GET['ids']));
 } else {
+    // Fallback to transient
     $recipe_ids = get_transient('recipe_view_' . get_current_user_id());
 }
 
@@ -26,8 +22,6 @@ if (empty($recipe_ids)) {
 }
 
 get_header();
-
-require_once(get_stylesheet_directory() . '/collection-permissions.php');
 
 // Build back URL with category filter if present
 $back_url = home_url('/recipe-manager/');
@@ -50,6 +44,7 @@ if (!empty($_GET['recipe_cat'])) {
     </div>
     
     <?php
+    // Get recipes
     $args = array(
         'post_type' => 'recipe',
         'posts_per_page' => -1,
@@ -70,9 +65,6 @@ if (!empty($_GET['recipe_cat'])) {
         
         $terms = get_the_terms($post_id, 'recipe_category');
         $category = ($terms && !is_wp_error($terms)) ? $terms[0]->name : 'Uncategorized';
-
-        $recipe_author_id = get_post_field('post_author', $post_id);
-        $can_edit = current_user_can('edit_posts') && user_can_manage_collection(get_current_user_id(), $recipe_author_id);
     ?>
     
     <div style="background: white; border: 2px solid #c84a31; margin-bottom: 40px; border-radius: 8px; overflow: hidden; page-break-inside: avoid;">
@@ -87,7 +79,7 @@ if (!empty($_GET['recipe_cat'])) {
             <span style="font-size: 14px; font-style: italic; margin-right: 15px;">
                 <?php echo esc_html($category); ?>
             </span>
-            <?php if ($can_edit): 
+            <?php if (current_user_can('edit_posts')): 
                 $edit_url = home_url('/recipe-editor/?id=' . $post_id);
             ?>
             <a href="<?php echo esc_url($edit_url); ?>" style="background: white; color: #c84a31; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 14px;">
