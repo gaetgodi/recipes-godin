@@ -4,8 +4,10 @@
  *
  * Complete recipe management interface with filtering, bulk actions, and printing
  *
- * @version 2.0.0
+ * @version 2.1.0
  * @changelog
+ *   2.1.0 - Share recipient list now includes authors who are in YOUR viewers list,
+ *            not just authors whose viewers list you are on. Bidirectional sharing.
  *   2.0.0 - Added data-label attributes to all <td> elements for mobile card layout.
  *   1.0.0 - Initial release.
  */
@@ -479,7 +481,10 @@ function openShareDialog() {
             $can_share_with = true;
             $role_display = ' [Subscriber]';
         } elseif ($is_author) {
-            if (user_can_view_collection($current_user_id, $user->ID)) {
+            // Show author if current user is in their viewers list,
+            // OR if they are in current user's viewers list (bidirectional)
+            if (user_can_view_collection($current_user_id, $user->ID) ||
+                user_can_view_collection($user->ID, $current_user_id)) {
                 $can_share_with = true;
                 $role_display = ' [Author]';
             }
