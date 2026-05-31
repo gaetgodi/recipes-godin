@@ -2,6 +2,15 @@
 /**
  * Recipe Image Upload and OCR Handler
  * Handles featured image upload and Claude API OCR extraction
+ *
+ * @version 2.0.0
+ * @changelog
+ *   2.0.0 - Added interpretation mode: fills recipe gaps using culinary reasoning,
+ *            tags all inferred content with [inferred], supports non-Latin scripts.
+ *            Both image and text extraction handlers support the new mode.
+ *            Strict extraction mode now marks illegible/crossed-out content with [unclear].
+ *            Translation preserves [inferred] and [unclear] tags.
+ *   1.0.0 - Initial release: image OCR, text extraction, translation (18 languages).
  */
 
 // Security check
@@ -28,6 +37,9 @@ function handle_recipe_image_upload() {
     
     // Get recipe ID if editing existing recipe
     $recipe_id = isset($_POST['recipe_id']) ? intval($_POST['recipe_id']) : 0;
+
+    // Get interpretation mode flag (default: false = strict extraction)
+    $interpretation_mode = !empty($_POST['interpretation_mode']) && $_POST['interpretation_mode'] === '1';
     
     // Upload the image to WordPress media library
     require_once(ABSPATH . 'wp-admin/includes/image.php');
@@ -53,7 +65,7 @@ function handle_recipe_image_upload() {
     $mime_type = $image_type['type'];
     
     // Call Claude API for OCR
-    $extraction_result = extract_recipe_from_image($base64_image, $mime_type);
+    $extraction_result = extract_recipe_from_image($base64_image, $mime_type, $interpretation_mode);
     
     if ($extraction_result['success']) {
         // Set as featured image if recipe ID provided
@@ -65,7 +77,8 @@ function handle_recipe_image_upload() {
             'attachment_id' => $attachment_id,
             'image_url' => $image_url,
             'extracted_data' => $extraction_result['data'],
-            'raw_response' => $extraction_result['raw']
+            'raw_response' => $extraction_result['raw'],
+            'interpretation_mode' => $interpretation_mode
         ));
     } else {
         wp_send_json_error(array(
@@ -78,8 +91,16 @@ function handle_recipe_image_upload() {
 
 /**
  * Extract recipe data from image using Claude API
+ *
+ * @param string $base64_image   Base64-encoded image data
+ * @param string $mime_type      MIME type of the image
+ * @param bool   $interpretation_mode
+ *   false (default) — strict extraction: preserve original wording, flag unclear parts,
+ *                     leave gaps where content is missing or crossed out.
+ *   true            — interpretation mode: fill in gaps using culinary reasoning,
+ *                     tag all inferred content with [inferred].
  */
-function extract_recipe_from_image($base64_image, $mime_type) {
+function extract_recipe_from_image($base64_image, $mime_type, $interpretation_mode = false) {
     // Get API key from wp-config.php
     if (!defined('ANTHROPIC_API_KEY') || ANTHROPIC_API_KEY === 'YOUR_KEY_GOES_HERE_WHEN_READY') {
         return array(
@@ -89,26 +110,37 @@ function extract_recipe_from_image($base64_image, $mime_type) {
     }
     
     $api_key = ANTHROPIC_API_KEY;
-    
-    // Prepare the API request
-    $request_body = array(
-        'model' => 'claude-sonnet-4-20250514',
-        'max_tokens' => 2000,
-        'messages' => array(
-            array(
-                'role' => 'user',
-                'content' => array(
-                    array(
-                        'type' => 'image',
-                        'source' => array(
-                            'type' => 'base64',
-                            'media_type' => $mime_type,
-                            'data' => $base64_image
-                        )
-                    ),
-                    array(
-                        'type' => 'text',
-                        'text' => 'Please extract the recipe from this image. If this is a handwritten or printed recipe, extract:
+
+    // Choose prompt based on mode
+    if ($interpretation_mode) {
+        $prompt = 'Please extract and interpret the recipe from this image. The source may be handwritten, incomplete, in a non-Latin script, or have crossed-out or scribbled sections.
+
+Your job:
+1. Extract what is clearly written (ingredients, quantities, steps).
+2. Ignore crossed-out or scribbled content.
+3. Where the recipe appears incomplete or a step is only hinted at, use culinary reasoning to fill in the gap — but TAG every inferred addition with [inferred].
+4. Translate non-English or non-Latin script content into English.
+5. Keep the original meaning and proportions; do not substitute ingredients.
+
+Format your response EXACTLY like this:
+
+TITLE: [recipe title or "Untitled Recipe" if not visible]
+
+INGREDIENTS:
+[ingredient 1]
+[ingredient 2]
+[etc.]
+
+METHOD:
+[step 1]
+[step 2]
+[etc.]
+
+Example of tagging: "Simmer for 20 minutes [inferred] until chickpeas are tender [inferred]."
+
+If there is NO recipe visible in this image, respond with exactly: "NO_RECIPE_FOUND"';
+    } else {
+        $prompt = 'Please extract the recipe from this image. If this is a handwritten or printed recipe, extract:
 
 1. Recipe title (if visible)
 2. Ingredients list (one per line)
@@ -130,7 +162,29 @@ METHOD:
 
 If there is NO recipe visible in this image, respond with exactly: "NO_RECIPE_FOUND"
 
-Be accurate with measurements and spelling. Preserve the original wording as much as possible.'
+Be accurate with measurements and spelling. Preserve the original wording as much as possible.
+If any part is illegible or crossed out, note it with [unclear] rather than guessing.';
+    }
+    
+    // Prepare the API request
+    $request_body = array(
+        'model' => 'claude-sonnet-4-20250514',
+        'max_tokens' => 2000,
+        'messages' => array(
+            array(
+                'role' => 'user',
+                'content' => array(
+                    array(
+                        'type' => 'image',
+                        'source' => array(
+                            'type' => 'base64',
+                            'media_type' => $mime_type,
+                            'data' => $base64_image
+                        )
+                    ),
+                    array(
+                        'type' => 'text',
+                        'text' => $prompt
                     )
                 )
             )
@@ -262,7 +316,7 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
         'messages' => array(
             array(
                 'role' => 'user',
-                'content' => "Please translate this recipe to $target_language. Maintain the exact same format (TITLE:, INGREDIENTS:, METHOD:). If it's already in $target_language, just return it as-is.\n\n" . $text_to_translate
+                'content' => "Please translate this recipe to $target_language. Maintain the exact same format (TITLE:, INGREDIENTS:, METHOD:). If it's already in $target_language, just return it as-is. Preserve any [inferred] or [unclear] tags as-is.\n\n" . $text_to_translate
             )
         )
     );
@@ -367,6 +421,9 @@ function handle_text_recipe_extraction() {
     }
     
     $text_content = isset($_POST['text_content']) ? sanitize_textarea_field($_POST['text_content']) : '';
+
+    // Get interpretation mode flag (default: false = strict extraction)
+    $interpretation_mode = !empty($_POST['interpretation_mode']) && $_POST['interpretation_mode'] === '1';
     
     if (empty($text_content)) {
         wp_send_json_error(array('message' => 'No text provided'));
@@ -378,15 +435,38 @@ function handle_text_recipe_extraction() {
     }
     
     $api_key = ANTHROPIC_API_KEY;
-    
-    // Prepare the API request to extract recipe from text
-    $request_body = array(
-        'model' => 'claude-sonnet-4-20250514',
-        'max_tokens' => 2000,
-        'messages' => array(
-            array(
-                'role' => 'user',
-                'content' => 'Please extract the recipe from this text. Parse it into structured format:
+
+    // Choose prompt based on mode
+    if ($interpretation_mode) {
+        $prompt = 'Please extract and interpret this recipe text. The source may be incomplete, in a non-Latin script, or have notes and cross-outs mixed in.
+
+Your job:
+1. Extract what is clearly written (ingredients, quantities, steps).
+2. Where the recipe appears incomplete or a step is only hinted at, use culinary reasoning to fill in the gap — but TAG every inferred addition with [inferred].
+3. Translate non-English or non-Latin script content into English.
+4. Keep the original meaning and proportions; do not substitute ingredients.
+
+Format your response EXACTLY like this:
+
+TITLE: [recipe title or "Untitled Recipe" if not visible]
+
+INGREDIENTS:
+[ingredient 1]
+[ingredient 2]
+[etc.]
+
+METHOD:
+[step 1]
+[step 2]
+[etc.]
+
+Example of tagging: "Simmer for 20 minutes [inferred] until chickpeas are tender [inferred]."
+
+Here is the text:
+
+' . $text_content;
+    } else {
+        $prompt = 'Please extract the recipe from this text. Parse it into structured format:
 
 TITLE: [recipe title or "Untitled Recipe" if not visible]
 
@@ -401,10 +481,21 @@ METHOD:
 [etc.]
 
 Do NOT translate the text - keep it in the original language. Just extract and structure it.
+If any part is illegible or unclear, note it with [unclear] rather than guessing.
 
 Here is the text:
 
-' . $text_content
+' . $text_content;
+    }
+    
+    // Prepare the API request to extract recipe from text
+    $request_body = array(
+        'model' => 'claude-sonnet-4-20250514',
+        'max_tokens' => 2000,
+        'messages' => array(
+            array(
+                'role' => 'user',
+                'content' => $prompt
             )
         )
     );
@@ -444,6 +535,7 @@ Here is the text:
     
     wp_send_json_success(array(
         'extracted_data' => $parsed,
-        'raw_response' => $extracted_text
+        'raw_response' => $extracted_text,
+        'interpretation_mode' => $interpretation_mode
     ));
 }

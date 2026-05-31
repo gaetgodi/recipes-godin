@@ -1,8 +1,15 @@
 <?php
 /**
  * Template Name: Recipe Editor
- * 
+ *
  * Frontend recipe add/edit interface with featured image OCR and text import
+ *
+ * @version 2.0.0
+ * @changelog
+ *   2.0.0 - Added "Interpret recipe" checkbox to both image and text import sections.
+ *            When checked, passes interpretation_mode=1 to the extraction AJAX handlers,
+ *            enabling gap-filling with [inferred] tagging via Claude API.
+ *   1.0.0 - Initial release.
  */
 
 // Include the image upload handler
@@ -326,6 +333,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
                 <button type="button" class="upload-btn" id="extractBtn" style="display: none; margin-left: 10px;">
                     Upload & Extract Recipe
                 </button>
+
+                <!-- Interpretation mode toggle — image -->
+                <div id="imageInterpretToggle" style="display: none; margin-top: 12px;">
+                    <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #444;">
+                        <input type="checkbox" id="imageInterpretMode" style="width: 16px; height: 16px;" />
+                        <span>🧠 <strong>Interpret recipe</strong> — fill gaps using culinary reasoning, tag inferred content with <code>[inferred]</code></span>
+                    </label>
+                    <p style="font-size: 12px; color: #888; margin: 4px 0 0 24px;">
+                        Use for incomplete, handwritten, or non-Latin script recipes. Leave unchecked for strict extraction.
+                    </p>
+                </div>
                 
                 <div id="imagePreview" class="image-preview" style="display: none;">
                     <img id="previewImg" src="" alt="Recipe image preview" />
@@ -376,6 +394,17 @@ Method:
 Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocolate chips. Bake for 12 minutes."
                         style="width: 100%; min-height: 250px; padding: 15px; font-family: monospace; font-size: 14px; border: 2px solid #ddd; border-radius: 4px;"
                     ></textarea>
+                </div>
+
+                <!-- Interpretation mode toggle — text -->
+                <div style="margin-bottom: 15px;">
+                    <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #444;">
+                        <input type="checkbox" id="textInterpretMode" style="width: 16px; height: 16px;" />
+                        <span>🧠 <strong>Interpret recipe</strong> — fill gaps using culinary reasoning, tag inferred content with <code>[inferred]</code></span>
+                    </label>
+                    <p style="font-size: 12px; color: #888; margin: 4px 0 0 24px;">
+                        Use for incomplete or non-Latin script recipes. Leave unchecked for strict extraction.
+                    </p>
                 </div>
                 
                 <button type="button" class="upload-btn" id="extractTextBtn" onclick="extractFromText()">
@@ -556,7 +585,6 @@ Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocol
 <script>
 // Tab switching
 function switchTab(tab) {
-    // Update tab buttons
     document.getElementById('imageTab').classList.remove('active');
     document.getElementById('textTab').classList.remove('active');
     
@@ -578,7 +606,6 @@ document.getElementById('recipeImageFile').addEventListener('change', function(e
     const file = e.target.files[0];
     if (!file) return;
     
-    // Validate file type
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     if (!validTypes.includes(file.type)) {
         alert('Please upload a valid image file (JPG, PNG, GIF, or WebP)');
@@ -586,7 +613,6 @@ document.getElementById('recipeImageFile').addEventListener('change', function(e
         return;
     }
     
-    // Validate file size (5MB = 5 * 1024 * 1024 bytes)
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
         alert('Image is too large! Please use an image smaller than 5 MB.\n\nCurrent size: ' + (file.size / 1024 / 1024).toFixed(2) + ' MB');
@@ -596,12 +622,12 @@ document.getElementById('recipeImageFile').addEventListener('change', function(e
     
     selectedFile = file;
     
-    // Show preview
     const reader = new FileReader();
     reader.onload = function(e) {
         document.getElementById('previewImg').src = e.target.result;
         document.getElementById('imagePreview').style.display = 'block';
         document.getElementById('extractBtn').style.display = 'inline-block';
+        document.getElementById('imageInterpretToggle').style.display = 'block';
         document.getElementById('uploadStatus').style.display = 'none';
     };
     reader.readAsDataURL(file);
@@ -613,24 +639,25 @@ document.getElementById('extractBtn').addEventListener('click', function() {
         return;
     }
     
-    // Show processing status
+    const interpretMode = document.getElementById('imageInterpretMode').checked ? '1' : '0';
+
     const statusDiv = document.getElementById('uploadStatus');
     statusDiv.className = 'upload-status processing';
-    statusDiv.textContent = '🔄 Uploading image and extracting recipe data...';
+    statusDiv.textContent = interpretMode === '1'
+        ? '🔄 Uploading image and interpreting recipe...'
+        : '🔄 Uploading image and extracting recipe data...';
     statusDiv.style.display = 'block';
     
-    // Disable button during upload
     this.disabled = true;
     document.getElementById('uploadImageBtn').disabled = true;
     
-    // Create FormData
     const formData = new FormData();
     formData.append('action', 'upload_recipe_image');
     formData.append('recipe_id', '<?php echo $recipe_id; ?>');
     formData.append('nonce', '<?php echo wp_create_nonce('recipe_image_upload'); ?>');
     formData.append('recipe_image', selectedFile);
+    formData.append('interpretation_mode', interpretMode);
     
-    // Upload and extract
     fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
         method: 'POST',
         body: formData
@@ -640,16 +667,16 @@ document.getElementById('extractBtn').addEventListener('click', function() {
         console.log('Full API Response:', data);
         
         if (data.success) {
-            // Update status
             statusDiv.className = 'upload-status success';
             
             if (data.data.extracted_data.found === false) {
                 statusDiv.textContent = '✅ Image uploaded! No recipe data found in image.';
                 document.getElementById('recipe_notes').value = 'No recipe interpreted in featured image';
             } else {
-                statusDiv.textContent = '✅ Image uploaded and recipe extracted! Check the fields below.';
+                statusDiv.textContent = interpretMode === '1'
+                    ? '✅ Image uploaded and recipe interpreted! Content tagged [inferred] was added by AI — review carefully.'
+                    : '✅ Image uploaded and recipe extracted! Check the fields below.';
                 
-                // Fill in the form fields
                 if (data.data.extracted_data.title) {
                     document.getElementById('recipe_title').value = data.data.extracted_data.title;
                 }
@@ -660,14 +687,11 @@ document.getElementById('extractBtn').addEventListener('click', function() {
                     document.getElementById('recipe_method').value = data.data.extracted_data.method;
                 }
                 
-                // Put raw extraction in notes
                 document.getElementById('recipe_notes').value = 'RAW EXTRACTION:\n\n' + data.data.raw_response;
                 
-                // Show translate button
                 showTranslateButton();
             }
             
-            // Store featured image ID
             document.getElementById('featuredImageId').value = data.data.attachment_id;
             
         } else {
@@ -694,10 +718,8 @@ document.getElementById('recipeTextFile').addEventListener('change', function(e)
     const file = e.target.files[0];
     if (!file) return;
     
-    // Show filename
     document.getElementById('textFileName').textContent = file.name;
     
-    // Read file content
     const reader = new FileReader();
     reader.onload = function(e) {
         document.getElementById('pastedRecipeText').value = e.target.result;
@@ -705,7 +727,7 @@ document.getElementById('recipeTextFile').addEventListener('change', function(e)
     reader.readAsText(file);
 });
 
-// Extract recipe from text (file or pasted) - does NOT translate
+// Extract recipe from text (file or pasted)
 function extractFromText() {
     const textContent = document.getElementById('pastedRecipeText').value.trim();
     
@@ -714,21 +736,24 @@ function extractFromText() {
         return;
     }
     
+    const interpretMode = document.getElementById('textInterpretMode').checked ? '1' : '0';
+
     const statusDiv = document.getElementById('textStatus');
     const extractBtn = document.getElementById('extractTextBtn');
     
     statusDiv.className = 'upload-status processing';
-    statusDiv.textContent = '🔄 Extracting recipe from text...';
+    statusDiv.textContent = interpretMode === '1'
+        ? '🔄 Interpreting recipe from text...'
+        : '🔄 Extracting recipe from text...';
     statusDiv.style.display = 'block';
     extractBtn.disabled = true;
     
-    // Create FormData
     const formData = new FormData();
     formData.append('action', 'extract_recipe_from_text');
     formData.append('nonce', '<?php echo wp_create_nonce('recipe_text_extract'); ?>');
     formData.append('text_content', textContent);
+    formData.append('interpretation_mode', interpretMode);
     
-    // Use text extraction API (does NOT translate)
     fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
         method: 'POST',
         body: formData
@@ -736,7 +761,6 @@ function extractFromText() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Fill in the form fields
             if (data.data.extracted_data.title) {
                 document.getElementById('recipe_title').value = data.data.extracted_data.title;
             }
@@ -748,12 +772,12 @@ function extractFromText() {
             }
             
             statusDiv.className = 'upload-status success';
-            statusDiv.textContent = '✅ Recipe extracted from text! Check the fields below.';
+            statusDiv.textContent = interpretMode === '1'
+                ? '✅ Recipe interpreted! Content tagged [inferred] was added by AI — review carefully.'
+                : '✅ Recipe extracted from text! Check the fields below.';
             
-            // Put original text in notes
             document.getElementById('recipe_notes').value = 'ORIGINAL TEXT:\n\n' + textContent;
             
-            // Show translate button
             showTranslateButton();
         } else {
             statusDiv.className = 'upload-status error';
@@ -771,15 +795,12 @@ function extractFromText() {
 
 // Show translate button with language selector after successful extraction
 function showTranslateButton() {
-    // Check if button already exists
     if (document.getElementById('translateContainer')) return;
     
-    // Determine which status div to use
     const imageStatus = document.getElementById('uploadStatus');
     const textStatus = document.getElementById('textStatus');
     const statusDiv = imageStatus.style.display !== 'none' ? imageStatus : textStatus;
     
-    // Create container for translate controls
     const translateContainer = document.createElement('div');
     translateContainer.id = 'translateContainer';
     translateContainer.style.marginTop = '10px';
@@ -787,7 +808,6 @@ function showTranslateButton() {
     translateContainer.style.gap = '10px';
     translateContainer.style.alignItems = 'center';
     
-    // Create language selector
     const langSelect = document.createElement('select');
     langSelect.id = 'targetLanguage';
     langSelect.className = 'upload-btn';
@@ -813,7 +833,6 @@ function showTranslateButton() {
         <option value="Thai">🇹🇭 Thai</option>
     `;
     
-    // Create translate button
     const translateBtn = document.createElement('button');
     translateBtn.type = 'button';
     translateBtn.id = 'translateBtn';
@@ -832,21 +851,17 @@ function translateRecipe() {
     const translateBtn = document.getElementById('translateBtn');
     const targetLang = document.getElementById('targetLanguage').value;
     
-    // Determine which status div to use
     const imageStatus = document.getElementById('uploadStatus');
     const textStatus = document.getElementById('textStatus');
     const statusDiv = imageStatus.style.display !== 'none' ? imageStatus : textStatus;
     
-    // Disable button
     translateBtn.disabled = true;
     translateBtn.textContent = '🔄 Translating...';
     
-    // Get current field values
     const title = document.getElementById('recipe_title').value;
     const ingredients = document.getElementById('recipe_ingredients').value;
     const method = document.getElementById('recipe_method').value;
     
-    // Create FormData
     const formData = new FormData();
     formData.append('action', 'translate_recipe');
     formData.append('nonce', '<?php echo wp_create_nonce('recipe_translation'); ?>');
@@ -855,7 +870,6 @@ function translateRecipe() {
     formData.append('method', method);
     formData.append('target_language', targetLang);
     
-    // Call translation AJAX
     fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
         method: 'POST',
         body: formData
@@ -863,7 +877,6 @@ function translateRecipe() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Update fields with translated text
             if (data.data.translated_data.title) {
                 document.getElementById('recipe_title').value = data.data.translated_data.title;
             }
@@ -871,7 +884,6 @@ function translateRecipe() {
                 document.getElementById('recipe_ingredients').value = data.data.translated_data.ingredients;
             }
             if (data.data.translated_data.method) {
-                // Auto-format method: split on periods to create line breaks
                 let method = data.data.translated_data.method;
                 method = method.replace(/\.\s+/g, '.\n');
                 document.getElementById('recipe_method').value = method.trim();
@@ -880,7 +892,6 @@ function translateRecipe() {
             statusDiv.className = 'upload-status success';
             statusDiv.textContent = '✅ Recipe translated to ' + targetLang + '!';
             
-            // Remove translate container
             document.getElementById('translateContainer').remove();
         } else {
             statusDiv.className = 'upload-status error';
@@ -904,21 +915,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const ingredients = document.getElementById('recipe_ingredients').value;
     const method = document.getElementById('recipe_method').value;
     
-    // Only show if there's actual content to translate
     if (title || ingredients || method) {
-        // Create a status div for edit mode if it doesn't exist
         if (!document.getElementById('editTranslateStatus')) {
             const statusDiv = document.createElement('div');
             statusDiv.id = 'editTranslateStatus';
             statusDiv.className = 'upload-status';
             statusDiv.style.display = 'none';
             
-            // Insert before the form
             const form = document.getElementById('recipeForm');
             form.parentNode.insertBefore(statusDiv, form);
         }
         
-        // Show translate controls for editing
         const formActions = document.querySelector('.form-actions');
         if (formActions && !document.getElementById('editTranslateContainer')) {
             const translateContainer = document.createElement('div');
