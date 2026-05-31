@@ -4,8 +4,9 @@
  *
  * Handles all GET and POST actions for recipe management
  *
- * @version 2.1.0
+ * @version 2.1.1
  * @changelog
+ *   2.1.1 - Fixed share action gate: subscribers can now execute shares (was blocked by edit_posts check).
  *   2.1.0 - When a subscriber is promoted to author via a share, also grant the sharer
  *            viewer access to the new author's collection (reciprocal), so both parties
  *            appear in each other's share dropdowns going forward.
@@ -168,7 +169,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
             break;
             
         case 'share':
-            if (!empty($selected_ids) && current_user_can('edit_posts') && !empty($_POST['share_to_user'])) {
+            if (!empty($selected_ids) && is_user_logged_in() && !empty($_POST['share_to_user'])) {
                 require_once(get_stylesheet_directory() . '/collection-permissions.php');
                 
                 $recipient_id = intval($_POST['share_to_user']);
