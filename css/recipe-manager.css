@@ -1,4 +1,12 @@
-/* Recipe Manager Page Styles */
+/* Recipe Manager Page Styles
+ * @version 2.0.0
+ * @changelog
+ *   2.0.0 - Added tablet (768px) and mobile (430px) responsive breakpoints.
+ *            Filter section stacks vertically on mobile, table transforms to card layout,
+ *            bulk action buttons go full-width and stack on mobile.
+ *            Requires data-label attributes on <td> elements for card labels (see template).
+ *   1.0.0 - Initial release.
+ */
 
 .recipe-manager {
     max-width: 1400px;
@@ -108,4 +116,139 @@
 .selected-count {
     font-weight: bold;
     color: #c84a31;
+}
+
+/* ============================================================
+   TABLET — max-width: 768px
+   ============================================================ */
+@media (max-width: 768px) {
+
+    .recipe-manager h1 {
+        font-size: 28px;
+        margin-bottom: 20px;
+    }
+
+    .filter-section {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .filter-section select,
+    .filter-section input {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Hide ID column to save space */
+    .recipe-manager-table th:nth-child(1),
+    .recipe-manager-table td:nth-child(1) {
+        display: none;
+    }
+
+    .bulk-actions {
+        flex-wrap: wrap;
+    }
+
+    .bulk-actions .action-btn {
+        flex: 1 1 auto;
+    }
+}
+
+/* ============================================================
+   MOBILE — max-width: 430px (iPhone 16 and all current iPhones)
+   ============================================================ */
+@media (max-width: 430px) {
+
+    .recipe-manager {
+        padding: 0 12px;
+        margin: 10px auto;
+    }
+
+    .recipe-manager h1 {
+        font-size: 22px;
+        margin-bottom: 15px;
+    }
+
+    .filter-section {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .filter-section select,
+    .filter-section input {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 16px; /* prevents iOS auto-zoom */
+    }
+
+    /* --- Table → card layout --- */
+    .recipe-manager-table,
+    .recipe-manager-table thead,
+    .recipe-manager-table tbody,
+    .recipe-manager-table th,
+    .recipe-manager-table td,
+    .recipe-manager-table tr {
+        display: block;
+    }
+
+    /* Hide the header row — labels come from data-label on each td */
+    .recipe-manager-table thead {
+        display: none;
+    }
+
+    .recipe-manager-table tbody tr {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        margin-bottom: 12px;
+        padding: 10px;
+        background: white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .recipe-manager-table td {
+        padding: 6px 4px;
+        border: none;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Label prefix from data-label attribute */
+    .recipe-manager-table td::before {
+        content: attr(data-label);
+        font-weight: bold;
+        color: #c84a31;
+        min-width: 80px;
+        font-size: 12px;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+
+    /* Checkbox column — no label needed */
+    .recipe-manager-table td:first-child::before {
+        content: '';
+        min-width: 0;
+    }
+
+    /* --- Bulk actions --- */
+    .bulk-actions {
+        flex-direction: column;
+        padding: 12px;
+        gap: 8px;
+    }
+
+    .bulk-actions .action-btn {
+        width: 100%;
+        padding: 12px;
+        font-size: 15px;
+        box-sizing: border-box;
+    }
+
+    .recipe-count {
+        font-size: 13px;
+    }
 }

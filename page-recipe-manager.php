@@ -1,8 +1,13 @@
 <?php
 /**
  * Template Name: Recipe Manager
- * 
+ *
  * Complete recipe management interface with filtering, bulk actions, and printing
+ *
+ * @version 2.0.0
+ * @changelog
+ *   2.0.0 - Added data-label attributes to all <td> elements for mobile card layout.
+ *   1.0.0 - Initial release.
  */
 
 get_header();
@@ -79,7 +84,6 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                     if ($collection['owner_id'] == $current_user_id) {
                         echo " (Yours)";
                     } else {
-                        // Show actual WordPress role of the collection owner
                         $owner_user = get_userdata($collection['owner_id']);
                         if ($owner_user && !empty($owner_user->roles)) {
                             $role = ucfirst($owner_user->roles[0]);
@@ -101,7 +105,6 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
     <?php endif; ?>
     
     <?php
-    // Show success messages
     if (isset($_GET['saved'])) {
         echo '<div style="background: #d4edda; padding: 15px; margin: 20px 0; border: 1px solid #c3e6cb; color: #155724; border-radius: 4px;">✅ Recipe saved successfully!</div>';
     }
@@ -131,7 +134,6 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
             <label style="font-weight: 600;">Filter by Categories:</label>
             
-            <!-- Category Filter Dropdown with Checkboxes -->
             <div style="position: relative;">
                 <button type="button" id="categoryFilterBtn" onclick="toggleCategoryDropdown()" class="action-btn" style="background: #6c757d; color: white; min-width: 200px; text-align: left; position: relative;">
                     <span id="filterBtnText">Select Categories</span>
@@ -146,10 +148,8 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                         </button>
                     </div>
                     <?php
-                    // Get categories that belong to the selected collection owner
                     $categories = get_user_categories_with_counts($selected_collection);
                     
-                    // Parse currently selected categories
                     $current_cats = array();
                     if (!empty($_GET['recipe_cat'])) {
                         $cat_string = $_GET['recipe_cat'];
@@ -157,8 +157,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                     }
                     
                     foreach ($categories as $cat) {
-                        // recipe_count already included from get_user_categories_with_counts
-                        if ($cat->recipe_count == 0) continue; // Skip empty categories
+                        if ($cat->recipe_count == 0) continue;
                         
                         $checked = in_array($cat->cat_id, $current_cats) ? 'checked' : '';
                         echo '<label style="display: block; padding: 8px 15px; cursor: pointer; border-bottom: 1px solid #f0f0f0;" onmouseover="this.style.background=\'#f8f9fa\'" onmouseout="this.style.background=\'white\'">';
@@ -209,7 +208,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
         </div>
         <?php endif; ?>
         
-        <?php if ($is_owner): // Only collection owners can manage permissions ?>
+        <?php if ($is_owner): ?>
         <button onclick="window.location.href='<?php echo home_url('/permissions-manager/'); ?>'" class="action-btn" style="background: #7c3aed; color: white;">
             🔐 Manage Permissions
         </button>
@@ -224,16 +223,14 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
     
     <form method="post" id="recipeManagerForm">
         <?php
-        // Get recipes from selected collection
         $args = array(
             'post_type' => 'recipe',
             'posts_per_page' => -1,
-            'author' => $selected_collection, // Show selected collection's recipes
+            'author' => $selected_collection,
             'orderby' => 'title',
             'order' => 'ASC',
         );
         
-        // Filter by multiple categories (AND logic)
         if (!empty($_GET['recipe_cat'])) {
             global $wpdb;
             
@@ -241,7 +238,6 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
             $cat_ids = array_map('intval', explode(',', $cat_string));
             
             if (count($cat_ids) === 1) {
-                // Single category - get all recipe IDs in this category
                 $recipe_ids = $wpdb->get_col($wpdb->prepare(
                     "SELECT recipe_id FROM {$wpdb->prefix}recipe_category_relationships WHERE cat_id = %d",
                     $cat_ids[0]
@@ -249,15 +245,13 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                 
                 if (!empty($recipe_ids)) {
                     $args['post__in'] = $recipe_ids;
-                    $args['orderby'] = 'post__in'; // Preserve order from query
+                    $args['orderby'] = 'post__in';
                 } else {
-                    $args['post__in'] = array(0); // No recipes
+                    $args['post__in'] = array(0);
                 }
             } else {
-                // Multiple categories - find recipes that have ALL selected categories (AND logic)
                 $placeholders = implode(',', array_fill(0, count($cat_ids), '%d'));
                 
-                // Find recipe IDs that appear in relationships for ALL selected categories
                 $sql = $wpdb->prepare("
                     SELECT recipe_id
                     FROM {$wpdb->prefix}recipe_category_relationships
@@ -270,9 +264,9 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                 
                 if (!empty($matching_recipe_ids)) {
                     $args['post__in'] = $matching_recipe_ids;
-                    $args['orderby'] = 'post__in'; // Preserve order from query
+                    $args['orderby'] = 'post__in';
                 } else {
-                    $args['post__in'] = array(0); // No recipes match all categories
+                    $args['post__in'] = array(0);
                 }
             }
         }
@@ -358,15 +352,12 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                         $recipes->the_post();
                         $post_id = get_the_ID();
                         
-                        // Get stored permanent recipe ID (or generate if missing)
                         $recipe_id = get_post_meta($post_id, '_recipe_id', true);
                         if (empty($recipe_id)) {
-                            // If no ID exists, create one based on post ID
                             $recipe_id = 'R' . str_pad($post_id, 4, '0', STR_PAD_LEFT);
                             update_post_meta($post_id, '_recipe_id', $recipe_id);
                         }
                         
-                        // Get all category names from custom tables
                         $recipe_cats = get_recipe_categories($post_id);
                         if (!empty($recipe_cats)) {
                             $category_names = array_map(function($cat) { return $cat->cat_name; }, $recipe_cats);
@@ -376,22 +367,21 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                         }
                 ?>
                 <tr>
-                    <td>
+                    <td data-label="">
                         <input type="checkbox" name="selected_recipes[]" value="<?php echo $post_id; ?>" class="recipe-checkbox" onchange="updateSelectedCount()">
                     </td>
-                    <td>
+                    <td data-label="ID">
                         <span class="recipe-id"><?php echo $recipe_id; ?></span>
                     </td>
-                    <td>
+                    <td data-label="Title">
                         <?php 
-                        // Everyone can view recipes by clicking the title
                         $view_url = home_url('/recipe-view-page/?ids=' . $post_id);
                         ?>
                         <a href="<?php echo esc_url($view_url); ?>" class="recipe-title-link">
                             <?php the_title(); ?>
                         </a>
                     </td>
-                    <td><?php echo esc_html($category_display); ?></td>
+                    <td data-label="Category"><?php echo esc_html($category_display); ?></td>
                 </tr>
                 <?php 
                     endwhile; 
@@ -406,7 +396,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
             </tbody>
         </table>
         
-        <!-- Bulk Actions -->
+        <!-- Bulk Actions - Bottom -->
         <div class="bulk-actions">
             <label><strong>With Selected:</strong></label>
             
@@ -456,7 +446,6 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
 <script src="<?php echo get_stylesheet_directory_uri(); ?>/recipe-manager-scripts.js"></script>
 
 <script>
-// Share dialog functions that need PHP data
 function openShareDialog() {
     const checked = document.querySelectorAll('.recipe-checkbox:checked');
     const recipeIds = Array.from(checked).map(cb => cb.value);
@@ -466,18 +455,16 @@ function openShareDialog() {
         return;
     }
     
-    // Get list of allowed recipients (subscribers + authors who granted permission)
     <?php
     require_once(get_stylesheet_directory() . '/collection-permissions.php');
     $current_user_id = get_current_user_id();
     $is_admin = current_user_can('administrator');
     
-    // Get all users
     $all_users = get_users();
     $recipient_list = array();
     
     foreach ($all_users as $user) {
-        if ($user->ID == $current_user_id) continue; // Skip self
+        if ($user->ID == $current_user_id) continue;
         
         $user_roles = (array) $user->roles;
         $is_subscriber = in_array('subscriber', $user_roles);
@@ -486,17 +473,12 @@ function openShareDialog() {
         $can_share_with = false;
         $role_display = '';
         
-        // Admins can share with anyone
         if ($is_admin) {
             $can_share_with = true;
-        }
-        // Subscribers can always receive shares
-        elseif ($is_subscriber) {
+        } elseif ($is_subscriber) {
             $can_share_with = true;
             $role_display = ' [Subscriber]';
-        }
-        // Authors: only if they granted current user permission
-        elseif ($is_author) {
+        } elseif ($is_author) {
             if (user_can_view_collection($current_user_id, $user->ID)) {
                 $can_share_with = true;
                 $role_display = ' [Author]';
@@ -546,9 +528,7 @@ function openShareDialog() {
 
 function closeShareDialog() {
     const dialog = document.getElementById('shareDialog');
-    if (dialog) {
-        dialog.remove();
-    }
+    if (dialog) dialog.remove();
 }
 
 function executeShare() {
@@ -570,7 +550,6 @@ function executeShare() {
     form.submit();
 }
 
-// Real-time recipe search
 function searchRecipes() {
     const searchTerm = document.getElementById('recipeSearch').value.toLowerCase();
     const rows = document.querySelectorAll('.recipe-manager-table tbody tr');
@@ -578,7 +557,7 @@ function searchRecipes() {
     
     rows.forEach(row => {
         const titleCell = row.querySelector('.recipe-title-link');
-        if (!titleCell) return; // Skip "no recipes" row
+        if (!titleCell) return;
         
         const title = titleCell.textContent.toLowerCase();
         const checkbox = row.querySelector('.recipe-checkbox');
@@ -588,13 +567,10 @@ function searchRecipes() {
             visibleCount++;
         } else {
             row.style.display = 'none';
-            // Uncheck hidden rows
             if (checkbox) checkbox.checked = false;
         }
     });
     
-    // Update the count
-    const totalCount = document.querySelectorAll('.recipe-manager-table tbody tr').length - 1; // Subtract header
     document.querySelector('.recipe-count strong').textContent = visibleCount;
     updateSelectedCount();
 }
@@ -604,7 +580,6 @@ function clearSearch() {
     searchRecipes();
 }
 
-// Initialize count on page load
 updateSelectedCount();
 </script>
 
