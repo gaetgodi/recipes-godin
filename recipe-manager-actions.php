@@ -4,8 +4,10 @@
  *
  * Handles all GET and POST actions for recipe management
  *
- * @version 2.1.1
+ * @version 2.1.2
  * @changelog
+ *   2.1.2 - Fixed share permission check for existing authors: now bidirectional,
+ *            matching the recipient list logic. Fixes silent no_permission redirect.
  *   2.1.1 - Fixed share action gate: subscribers can now execute shares (was blocked by edit_posts check).
  *   2.1.0 - When a subscriber is promoted to author via a share, also grant the sharer
  *            viewer access to the new author's collection (reciprocal), so both parties
@@ -187,7 +189,8 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                 $recipient_is_author = in_array('author', $recipient->roles) || in_array('editor', $recipient->roles);
                 
                 if ($recipient_is_author && !$recipient_is_subscriber) {
-                    $has_permission = user_can_view_collection($current_user_id, $recipient_id);
+                    $has_permission = user_can_view_collection($current_user_id, $recipient_id) ||
+                                      user_can_view_collection($recipient_id, $current_user_id);
                     
                     if (!$has_permission && !$is_admin) {
                         $redirect_url = home_url('/recipe-manager/?share_error=no_permission');
