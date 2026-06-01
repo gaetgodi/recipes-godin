@@ -4,8 +4,9 @@
  *
  * Handles all GET and POST actions for recipe management
  *
- * @version 2.1.3
+ * @version 2.1.4
  * @changelog
+ *   2.1.4 - Share action now copies featured image to recipient's recipe.
  *   2.1.3 - Grant reciprocal viewer permission when sharing with an existing author,
  *            so sharer appears in recipient's collection dropdown going forward.
  *   2.1.2 - Fixed share permission check for existing authors: now bidirectional,
@@ -254,6 +255,9 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                             update_post_meta($new_id, '_recipe_ingredients', get_post_meta($original_id, '_recipe_ingredients', true));
                             update_post_meta($new_id, '_recipe_method', get_post_meta($original_id, '_recipe_method', true));
                             update_post_meta($new_id, '_recipe_notes', get_post_meta($original_id, '_recipe_notes', true));
+                            
+                            // Copy featured image if present
+                            copy_recipe_featured_image($original_id, $new_id);
                             
                             $recipe_permanent_id = 'R' . str_pad($new_id, 4, '0', STR_PAD_LEFT);
                             update_post_meta($new_id, '_recipe_id', $recipe_permanent_id);
