@@ -105,6 +105,7 @@ function handle_recipe_image_upload() {
  */
 function extract_recipe_from_image($base64_image, $mime_type, $interpretation_mode = false) {
     // Get API key from wp-config.php
+    file_put_contents('/tmp/recipe_debug.txt', 'FUNCTION CALLED - mime: ' . $mime_type . ' - image size: ' . strlen($base64_image));
     if (!defined('ANTHROPIC_API_KEY') || ANTHROPIC_API_KEY === 'YOUR_KEY_GOES_HERE_WHEN_READY') {
         return array(
             'success' => false,
@@ -348,7 +349,7 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
     $body = wp_remote_retrieve_body($response);
     $http_code = wp_remote_retrieve_response_code($response);
     $data = json_decode($body, true);
-    file_put_contents('/tmp/recipe_debug.txt', 'HTTP: ' . $http_code . "\nBODY: " . substr($body, 0, 1000));
+    
     if ($http_code !== 200) {
         $error_msg = isset($data['error']['message']) ? $data['error']['message'] : 'HTTP ' . $http_code;
         return array(
