@@ -27,6 +27,7 @@ add_action('wp_ajax_upload_recipe_image', 'handle_recipe_image_upload');
 function handle_recipe_image_upload() {
     // Verify nonce
     check_ajax_referer('recipe_image_upload', 'nonce');
+    file_put_contents('/tmp/recipe_debug.txt', 'HANDLER CALLED - FILES: ' . print_r($_FILES, true));
     
     // Check permissions
     if (!current_user_can('edit_posts')) {
@@ -105,7 +106,7 @@ function handle_recipe_image_upload() {
  */
 function extract_recipe_from_image($base64_image, $mime_type, $interpretation_mode = false) {
     // Get API key from wp-config.php
-    file_put_contents('/tmp/recipe_debug.txt', 'FUNCTION CALLED - mime: ' . $mime_type . ' - image size: ' . strlen($base64_image));
+    
     if (!defined('ANTHROPIC_API_KEY') || ANTHROPIC_API_KEY === 'YOUR_KEY_GOES_HERE_WHEN_READY') {
         return array(
             'success' => false,
