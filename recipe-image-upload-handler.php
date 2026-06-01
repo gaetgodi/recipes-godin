@@ -3,9 +3,11 @@
  * Recipe Image Upload and OCR Handler
  * Handles featured image upload and Claude API OCR extraction
  *
- * @version 2.1.2
+ * @version 2.1.3
  * @changelog
- *   2.1.2 - parse_recipe_extraction() method regex now stops at NOTES: section.
+ *   2.1.3 - Translation timeout increased to 60s, max_tokens to 3000 to handle
+ *            verbose scripts like Gujarati without timing out.
+ *   2.1.2 - parse_recipe_extraction() method regex stops at NOTES:.
  *            Translation handler skips notes starting with RAW EXTRACTION: or ORIGINAL TEXT:
  *            to prevent machine-generated content being translated and duplicated.
  *   2.1.1 - Interpretation mode generates descriptive English title.
@@ -322,7 +324,7 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
     
     $request_body = array(
         'model' => 'claude-sonnet-4-20250514',
-        'max_tokens' => 2000,
+        'max_tokens' => 3000,
         'messages' => array(
             array(
                 'role' => 'user',
@@ -333,7 +335,7 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
     
     // Make API request
     $response = wp_remote_post('https://api.anthropic.com/v1/messages', array(
-        'timeout' => 30,
+        'timeout' => 60,
         'headers' => array(
             'Content-Type' => 'application/json',
             'x-api-key' => $api_key,
