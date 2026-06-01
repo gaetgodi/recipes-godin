@@ -869,6 +869,7 @@ function translateRecipe() {
     const title = document.getElementById('recipe_title').value;
     const ingredients = document.getElementById('recipe_ingredients').value;
     const method = document.getElementById('recipe_method').value;
+    const notes = document.getElementById('recipe_notes').value;
     
     const formData = new FormData();
     formData.append('action', 'translate_recipe');
@@ -876,6 +877,7 @@ function translateRecipe() {
     formData.append('title', title);
     formData.append('ingredients', ingredients);
     formData.append('method', method);
+    formData.append('notes', notes);
     formData.append('target_language', targetLang);
     
     fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
@@ -895,6 +897,12 @@ function translateRecipe() {
                 let method = data.data.translated_data.method;
                 method = method.replace(/\.\s+/g, '.\n');
                 document.getElementById('recipe_method').value = method.trim();
+            }
+            if (data.data.translated_data.notes) {
+                const originalNotes = document.getElementById('recipe_notes').value;
+                const translatedNotes = data.data.translated_data.notes;
+                document.getElementById('recipe_notes').value = translatedNotes
+                    + '\n\n--- Original Notes ---\n\n' + originalNotes;
             }
             
             statusDiv.className = 'upload-status success';
@@ -980,6 +988,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const title = document.getElementById('recipe_title').value;
                 const ingredients = document.getElementById('recipe_ingredients').value;
                 const method = document.getElementById('recipe_method').value;
+                const notes = document.getElementById('recipe_notes').value;
                 
                 translateBtn.disabled = true;
                 translateBtn.textContent = '🔄 Translating...';
@@ -990,6 +999,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 formData.append('title', title);
                 formData.append('ingredients', ingredients);
                 formData.append('method', method);
+                formData.append('notes', notes);
                 formData.append('target_language', targetLang);
                 
                 fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
@@ -1009,6 +1019,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             let method = data.data.translated_data.method;
                             method = method.replace(/\.\s+/g, '.\n');
                             document.getElementById('recipe_method').value = method.trim();
+                        }
+                        if (data.data.translated_data.notes) {
+                            const originalNotes = document.getElementById('recipe_notes').value;
+                            const translatedNotes = data.data.translated_data.notes;
+                            document.getElementById('recipe_notes').value = translatedNotes
+                                + '\n\n--- Original Notes ---\n\n' + originalNotes;
                         }
                         
                         statusDiv.className = 'upload-status success';

@@ -3,8 +3,11 @@
  * Recipe Image Upload and OCR Handler
  * Handles featured image upload and Claude API OCR extraction
  *
- * @version 2.0.0
+ * @version 2.1.0
  * @changelog
+ *   2.1.0 - translate_recipe_to_language() now accepts and translates notes.
+ *            Notes translation is returned separately so JS can prepend translated
+ *            notes above original notes with a divider.
  *   2.0.0 - Added interpretation mode: fills recipe gaps using culinary reasoning,
  *            tags all inferred content with [inferred], supports non-Latin scripts.
  *            Both image and text extraction handlers support the new mode.
@@ -296,7 +299,7 @@ function parse_recipe_extraction($text) {
 /**
  * Translate extracted recipe text to any language using Claude API
  */
-function translate_recipe_to_language($title, $ingredients, $method, $target_language = 'English') {
+function translate_recipe_to_language($title, $ingredients, $method, $target_language = 'English', $notes = '') {
     // Get API key from wp-config.php
     if (!defined('ANTHROPIC_API_KEY') || ANTHROPIC_API_KEY === 'YOUR_KEY_GOES_HERE_WHEN_READY') {
         return array(
@@ -309,6 +312,9 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
     
     // Prepare the translation request
     $text_to_translate = "TITLE: $title\n\nINGREDIENTS:\n$ingredients\n\nMETHOD:\n$method";
+    if (!empty($notes)) {
+        $text_to_translate .= "\n\nNOTES:\n$notes";
+    }
     
     $request_body = array(
         'model' => 'claude-sonnet-4-20250514',
@@ -316,7 +322,7 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
         'messages' => array(
             array(
                 'role' => 'user',
-                'content' => "Please translate this recipe to $target_language. Maintain the exact same format (TITLE:, INGREDIENTS:, METHOD:). If it's already in $target_language, just return it as-is. Preserve any [inferred] or [unclear] tags as-is.\n\n" . $text_to_translate
+                'content' => "Please translate this recipe to $target_language. Maintain the exact same format (TITLE:, INGREDIENTS:, METHOD:, and NOTES: if present). If it's already in $target_language, just return it as-is. Preserve any [inferred] or [unclear] tags as-is.\n\n" . $text_to_translate
             )
         )
     );
@@ -363,6 +369,13 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
     // Parse the translated response
     $parsed = parse_recipe_extraction($translated_text);
     
+    // Extract notes if present
+    if (preg_match('/NOTES:\s*\n(.+?)$/is', $translated_text, $matches)) {
+        $parsed['notes'] = trim($matches[1]);
+    } else {
+        $parsed['notes'] = '';
+    }
+    
     return array(
         'success' => true,
         'data' => $parsed
@@ -386,6 +399,7 @@ function handle_recipe_translation() {
     $title = isset($_POST['title']) ? sanitize_text_field($_POST['title']) : '';
     $ingredients = isset($_POST['ingredients']) ? sanitize_textarea_field($_POST['ingredients']) : '';
     $method = isset($_POST['method']) ? sanitize_textarea_field($_POST['method']) : '';
+    $notes = isset($_POST['notes']) ? sanitize_textarea_field($_POST['notes']) : '';
     $target_language = isset($_POST['target_language']) ? sanitize_text_field($_POST['target_language']) : 'English';
     
     if (empty($title) && empty($ingredients) && empty($method)) {
@@ -393,7 +407,7 @@ function handle_recipe_translation() {
     }
     
     // Call translation function with target language
-    $result = translate_recipe_to_language($title, $ingredients, $method, $target_language);
+    $result = translate_recipe_to_language($title, $ingredients, $method, $target_language, $notes);
     
     if ($result['success']) {
         wp_send_json_success(array(
