@@ -4,8 +4,9 @@
  *
  * Screen-optimized view for selected recipes
  *
- * @version 2.1.2
+ * @version 2.1.3
  * @changelog
+ *   2.1.3 - Show featured image (Original Image) after notes section.
  *   2.1.2 - Show all categories comma-separated, not just first one.
  *   2.1.1 - Fixed admin losing edit access. Fixed Uncategorized bug (use get_recipe_categories).
  *   2.1.0 - Edit button now checks user_can_manage_collection() in addition to edit_posts,
@@ -125,6 +126,14 @@ if (!empty($_GET['recipe_cat'])) {
                 <div style="font-style: italic; color: #666;">
                     <?php echo wp_kses_post($notes); ?>
                 </div>
+            </div>
+            <?php endif; ?>
+
+            <?php $featured_image_url = get_the_post_thumbnail_url($post_id, 'large'); ?>
+            <?php if ($featured_image_url): ?>
+            <div style="grid-column: 1 / -1; margin-top: 20px; padding-top: 20px; border-top: 2px dashed #ddd;">
+                <h3 style="color: #c84a31; font-size: 18px; margin: 0 0 10px 0;">Original Image</h3>
+                <img src="<?php echo esc_url($featured_image_url); ?>" alt="Original recipe image" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
             </div>
             <?php endif; ?>
             
