@@ -233,7 +233,7 @@ If any part is illegible or crossed out, note it with [unclear] rather than gues
     }
     
     $extracted_text = $data['content'][0]['text'];
-    
+    error_log('RECIPE_DEBUG: ' . substr($extracted_text, 0, 500));
     // Check if no recipe found
     if (trim($extracted_text) === 'NO_RECIPE_FOUND') {
         return array(
