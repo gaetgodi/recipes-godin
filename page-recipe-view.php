@@ -4,8 +4,11 @@
  *
  * Screen-optimized view for selected recipes
  *
- * @version 2.1.0
+ * @version 2.1.1
  * @changelog
+ *   2.1.1 - Fixed admin losing edit access (add administrator check to $can_edit).
+ *            Fixed category showing as Uncategorized (use get_recipe_categories() 
+ *            instead of get_the_terms()).
  *   2.1.0 - Edit button now checks user_can_manage_collection() in addition to edit_posts,
  *            so viewers of other collections no longer see an Edit button they can't use.
  *   1.0.0 - Initial release.
@@ -68,11 +71,12 @@ if (!empty($_GET['recipe_cat'])) {
         $method = get_post_meta($post_id, '_recipe_method', true);
         $notes = get_post_meta($post_id, '_recipe_notes', true);
         
-        $terms = get_the_terms($post_id, 'recipe_category');
-        $category = ($terms && !is_wp_error($terms)) ? $terms[0]->name : 'Uncategorized';
+        $recipe_cats = get_recipe_categories($post_id);
+        $category = !empty($recipe_cats) ? $recipe_cats[0]->cat_name : 'Uncategorized';
 
         $recipe_author_id = get_post_field('post_author', $post_id);
-        $can_edit = current_user_can('edit_posts') && user_can_manage_collection(get_current_user_id(), $recipe_author_id);
+        $can_edit = current_user_can('administrator') ||
+                    (current_user_can('edit_posts') && user_can_manage_collection(get_current_user_id(), $recipe_author_id));
     ?>
     
     <div style="background: white; border: 2px solid #c84a31; margin-bottom: 40px; border-radius: 8px; overflow: hidden; page-break-inside: avoid;">
