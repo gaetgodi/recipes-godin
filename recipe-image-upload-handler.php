@@ -3,8 +3,11 @@
  * Recipe Image Upload and OCR Handler
  * Handles featured image upload and Claude API OCR extraction
  *
- * @version 2.1.0
+ * @version 2.1.1
  * @changelog
+ *   2.1.1 - Interpretation mode now generates a descriptive English title instead of
+ *            "Untitled Recipe". Parser no longer strips the title. Both image and text
+ *            interpretation prompts updated.
  *   2.1.0 - translate_recipe_to_language() now accepts and translates notes.
  *            Notes translation is returned separately so JS can prepend translated
  *            notes above original notes with a divider.
@@ -27,7 +30,6 @@ add_action('wp_ajax_upload_recipe_image', 'handle_recipe_image_upload');
 function handle_recipe_image_upload() {
     // Verify nonce
     check_ajax_referer('recipe_image_upload', 'nonce');
-    file_put_contents('/tmp/recipe_debug.txt', 'HANDLER CALLED - FILES: ' . print_r($_FILES, true));
     
     // Check permissions
     if (!current_user_can('edit_posts')) {
@@ -106,7 +108,6 @@ function handle_recipe_image_upload() {
  */
 function extract_recipe_from_image($base64_image, $mime_type, $interpretation_mode = false) {
     // Get API key from wp-config.php
-    
     if (!defined('ANTHROPIC_API_KEY') || ANTHROPIC_API_KEY === 'YOUR_KEY_GOES_HERE_WHEN_READY') {
         return array(
             'success' => false,
@@ -126,10 +127,11 @@ Your job:
 3. Where the recipe appears incomplete or a step is only hinted at, use culinary reasoning to fill in the gap — but TAG every inferred addition with [inferred].
 4. Translate non-English or non-Latin script content into English.
 5. Keep the original meaning and proportions; do not substitute ingredients.
+6. For the title: if no title is visible, create a short descriptive English title based on the main ingredient and cuisine style (e.g. "Gujarati Soybean Curry", "Spiced Chickpea Stew"). Never use "Untitled Recipe".
 
 Format your response EXACTLY like this:
 
-TITLE: [recipe title or "Untitled Recipe" if not visible]
+TITLE: [descriptive English title]
 
 INGREDIENTS:
 [ingredient 1]
@@ -274,9 +276,6 @@ function parse_recipe_extraction($text) {
     // Extract title
     if (preg_match('/TITLE:\s*(.+?)(?=\n|$)/i', $text, $matches)) {
         $result['title'] = trim($matches[1]);
-        if ($result['title'] === 'Untitled Recipe') {
-            $result['title'] = '';
-        }
     }
     
     // Extract ingredients
@@ -461,10 +460,11 @@ Your job:
 2. Where the recipe appears incomplete or a step is only hinted at, use culinary reasoning to fill in the gap — but TAG every inferred addition with [inferred].
 3. Translate non-English or non-Latin script content into English.
 4. Keep the original meaning and proportions; do not substitute ingredients.
+5. For the title: if no title is visible, create a short descriptive English title based on the main ingredient and cuisine style (e.g. "Gujarati Soybean Curry", "Spiced Chickpea Stew"). Never use "Untitled Recipe".
 
 Format your response EXACTLY like this:
 
-TITLE: [recipe title or "Untitled Recipe" if not visible]
+TITLE: [descriptive English title]
 
 INGREDIENTS:
 [ingredient 1]
