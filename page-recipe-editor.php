@@ -4,8 +4,9 @@
  *
  * Frontend recipe add/edit interface with featured image OCR and text import
  *
- * @version 2.0.0
+ * @version 2.1.0
  * @changelog
+ *   2.1.0 - Show current categories above editor form when editing a recipe.
  *   2.0.0 - Added "Interpret recipe" checkbox to both image and text import sections.
  *            When checked, passes interpretation_mode=1 to the extraction AJAX handlers,
  *            enabling gap-filling with [inferred] tagging via Claude API.
@@ -416,6 +417,13 @@ Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocol
         </div>
     </div>
     
+    <?php if ($is_editing && !empty($recipe_categories_objs)): ?>
+    <div style="background: #f0f8ff; border: 1px solid #2271b1; border-radius: 4px; padding: 10px 15px; margin-bottom: 20px; font-size: 14px; color: #333;">
+        <strong>📁 Current categories:</strong>
+        <?php echo esc_html(implode(', ', array_map(function($c) { return $c->cat_name; }, $recipe_categories_objs))); ?>
+    </div>
+    <?php endif; ?>
+
     <form method="post" class="editor-form" id="recipeForm">
         <?php wp_nonce_field('save_recipe_' . $recipe_id); ?>
         <input type="hidden" name="featured_image_id" id="featuredImageId" value="<?php echo $featured_image_id; ?>" />

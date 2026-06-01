@@ -4,11 +4,10 @@
  *
  * Screen-optimized view for selected recipes
  *
- * @version 2.1.1
+ * @version 2.1.2
  * @changelog
- *   2.1.1 - Fixed admin losing edit access (add administrator check to $can_edit).
- *            Fixed category showing as Uncategorized (use get_recipe_categories() 
- *            instead of get_the_terms()).
+ *   2.1.2 - Show all categories comma-separated, not just first one.
+ *   2.1.1 - Fixed admin losing edit access. Fixed Uncategorized bug (use get_recipe_categories).
  *   2.1.0 - Edit button now checks user_can_manage_collection() in addition to edit_posts,
  *            so viewers of other collections no longer see an Edit button they can't use.
  *   1.0.0 - Initial release.
@@ -72,7 +71,7 @@ if (!empty($_GET['recipe_cat'])) {
         $notes = get_post_meta($post_id, '_recipe_notes', true);
         
         $recipe_cats = get_recipe_categories($post_id);
-        $category = !empty($recipe_cats) ? $recipe_cats[0]->cat_name : 'Uncategorized';
+        $category = !empty($recipe_cats) ? implode(', ', array_map(function($c) { return $c->cat_name; }, $recipe_cats)) : 'Uncategorized';
 
         $recipe_author_id = get_post_field('post_author', $post_id);
         $can_edit = current_user_can('administrator') ||
