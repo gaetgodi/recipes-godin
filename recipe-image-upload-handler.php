@@ -233,7 +233,7 @@ If any part is illegible or crossed out, note it with [unclear] rather than gues
     }
     
     $extracted_text = $data['content'][0]['text'];
-    file_put_contents('/tmp/recipe_debug.txt', 'MIME: ' . $mime_type . "\nRESPONSE: " . substr($extracted_text, 0, 500));
+    
     // Check if no recipe found
     if (trim($extracted_text) === 'NO_RECIPE_FOUND') {
         return array(
@@ -348,7 +348,7 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
     $body = wp_remote_retrieve_body($response);
     $http_code = wp_remote_retrieve_response_code($response);
     $data = json_decode($body, true);
-    
+    file_put_contents('/tmp/recipe_debug.txt', 'HTTP: ' . $http_code . "\nBODY: " . substr($body, 0, 1000));
     if ($http_code !== 200) {
         $error_msg = isset($data['error']['message']) ? $data['error']['message'] : 'HTTP ' . $http_code;
         return array(
