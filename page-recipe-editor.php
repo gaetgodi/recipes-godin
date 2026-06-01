@@ -4,10 +4,11 @@
  *
  * Frontend recipe add/edit interface with featured image OCR and text import
  *
- * @version 2.1.1
+ * @version 2.1.2
  * @changelog
- *   2.1.1 - Both translate JS functions now skip notes prepend when notes are
- *            machine-generated (RAW EXTRACTION: or ORIGINAL TEXT:).
+ *   2.1.2 - Edit mode translate button and language dropdown now use upload-btn
+ *            (red) class for visibility, matching creation mode.
+ *   2.1.1 - Both translate JS functions skip machine-generated notes.
  *   2.1.0 - Show current categories above editor form when editing a recipe.
  *   2.0.0 - Added "Interpret recipe" checkbox to both image and text import sections.
  *            When checked, passes interpretation_mode=1 to the extraction AJAX handlers,
@@ -958,7 +959,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const langSelect = document.createElement('select');
             langSelect.id = 'editTargetLanguage';
-            langSelect.className = 'btn btn-secondary';
+            langSelect.className = 'upload-btn';
             langSelect.style.padding = '8px 12px';
             langSelect.innerHTML = `
                 <option value="English">🇬🇧 English</option>
@@ -983,7 +984,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const translateBtn = document.createElement('button');
             translateBtn.type = 'button';
-            translateBtn.className = 'btn btn-secondary';
+            translateBtn.className = 'upload-btn';
             translateBtn.textContent = '🌐 Translate Recipe';
             translateBtn.onclick = function() {
                 const statusDiv = document.getElementById('editTranslateStatus');
