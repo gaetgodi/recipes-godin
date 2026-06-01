@@ -4,8 +4,10 @@
  *
  * Frontend recipe add/edit interface with featured image OCR and text import
  *
- * @version 2.1.0
+ * @version 2.1.1
  * @changelog
+ *   2.1.1 - Both translate JS functions now skip notes prepend when notes are
+ *            machine-generated (RAW EXTRACTION: or ORIGINAL TEXT:).
  *   2.1.0 - Show current categories above editor form when editing a recipe.
  *   2.0.0 - Added "Interpret recipe" checkbox to both image and text import sections.
  *            When checked, passes interpretation_mode=1 to the extraction AJAX handlers,
@@ -901,8 +903,11 @@ function translateRecipe() {
             if (data.data.translated_data.notes) {
                 const originalNotes = document.getElementById('recipe_notes').value;
                 const translatedNotes = data.data.translated_data.notes;
-                document.getElementById('recipe_notes').value = translatedNotes
-                    + '\n\n--- Original Notes ---\n\n' + originalNotes;
+                // If original notes are machine-generated, replace rather than prepend
+                const isMachineNotes = originalNotes.startsWith('RAW EXTRACTION:') || originalNotes.startsWith('ORIGINAL TEXT:');
+                document.getElementById('recipe_notes').value = isMachineNotes
+                    ? originalNotes
+                    : translatedNotes + '\n\n--- Original Notes ---\n\n' + originalNotes;
             }
             
             statusDiv.className = 'upload-status success';
@@ -1023,8 +1028,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (data.data.translated_data.notes) {
                             const originalNotes = document.getElementById('recipe_notes').value;
                             const translatedNotes = data.data.translated_data.notes;
-                            document.getElementById('recipe_notes').value = translatedNotes
-                                + '\n\n--- Original Notes ---\n\n' + originalNotes;
+                            const isMachineNotes = originalNotes.startsWith('RAW EXTRACTION:') || originalNotes.startsWith('ORIGINAL TEXT:');
+                            document.getElementById('recipe_notes').value = isMachineNotes
+                                ? originalNotes
+                                : translatedNotes + '\n\n--- Original Notes ---\n\n' + originalNotes;
                         }
                         
                         statusDiv.className = 'upload-status success';

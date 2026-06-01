@@ -3,9 +3,12 @@
  * Recipe Image Upload and OCR Handler
  * Handles featured image upload and Claude API OCR extraction
  *
- * @version 2.1.1
+ * @version 2.1.2
  * @changelog
- *   2.1.1 - Interpretation mode now generates a descriptive English title instead of
+ *   2.1.2 - parse_recipe_extraction() method regex now stops at NOTES: section.
+ *            Translation handler skips notes starting with RAW EXTRACTION: or ORIGINAL TEXT:
+ *            to prevent machine-generated content being translated and duplicated.
+ *   2.1.1 - Interpretation mode generates descriptive English title.
  *            "Untitled Recipe". Parser no longer strips the title. Both image and text
  *            interpretation prompts updated.
  *   2.1.0 - translate_recipe_to_language() now accepts and translates notes.
@@ -286,8 +289,8 @@ function parse_recipe_extraction($text) {
         $result['ingredients'] = $ingredients;
     }
     
-    // Extract method
-    if (preg_match('/METHOD:\s*\n(.+?)$/is', $text, $matches)) {
+    // Extract method — stop at NOTES: if present
+    if (preg_match('/METHOD:\s*\n(.+?)(?=\n\s*NOTES:|$)/is', $text, $matches)) {
         $method = trim($matches[1]);
         // Clean up and format
         $method = preg_replace('/^\d+[\.)]\s*/m', '', $method);
@@ -407,8 +410,16 @@ function handle_recipe_translation() {
         wp_send_json_error(array('message' => 'No text to translate'));
     }
     
+    // Don't translate machine-generated notes (raw extractions) — pass empty string
+    $notes_to_translate = '';
+    if (!empty($notes) &&
+        strpos($notes, 'RAW EXTRACTION:') !== 0 &&
+        strpos($notes, 'ORIGINAL TEXT:') !== 0) {
+        $notes_to_translate = $notes;
+    }
+    
     // Call translation function with target language
-    $result = translate_recipe_to_language($title, $ingredients, $method, $target_language, $notes);
+    $result = translate_recipe_to_language($title, $ingredients, $method, $target_language, $notes_to_translate);
     
     if ($result['success']) {
         wp_send_json_success(array(
