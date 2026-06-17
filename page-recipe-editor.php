@@ -131,8 +131,8 @@ if ($is_editing) {
         $html = strip_tags($html);
         
         if ($is_method) {
-            $html = str_replace('.', ".\n", $html);
-            $html = preg_replace('/(\d)\.\n(\d)/', '$1.$2', $html);
+            $html = preg_replace('/\.(?!\d)/', ".\n", $html);
+                        $html = preg_replace('/(\d)\.\n(\d)/', '$1.$2', $html);
         }
         
         $lines = explode("\n", $html);
