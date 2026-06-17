@@ -539,8 +539,6 @@ get_header();
     </div>
     <?php endif; ?>
     
-</div>
-
 <?php if (current_user_can('manage_options')): ?>
     <!-- Admin: User Management -->
     <div class="permissions-section" style="border-color: #d63638;">
@@ -594,6 +592,5 @@ get_header();
         <?php else: ?>
         <div class="empty-state">No users to manage.</div>
         <?php endif; ?>
-    </div>
-    <?php endif; ?>
+       <?php endif; ?>
 <?php get_footer(); ?>
