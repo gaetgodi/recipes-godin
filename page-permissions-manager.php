@@ -93,6 +93,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $success_message = "Demoted {$user->display_name} to Viewer";
             }
             break;
+
+            case 'delete_user_recipes':
+                if (current_user_can('manage_options')) {
+                    $target_user = get_userdata($user_id);
+                    if ($target_user) {
+                        global $wpdb;
+                        // Delete postmeta first
+                        $wpdb->query($wpdb->prepare("
+                            DELETE pm FROM {$wpdb->postmeta} pm
+                            JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+                            WHERE p.post_author = %d AND p.post_type = 'recipe'
+                        ", $user_id));
+                        // Delete posts
+                        $wpdb->query($wpdb->prepare("
+                            DELETE FROM {$wpdb->posts}
+                            WHERE post_author = %d AND post_type = 'recipe'
+                        ", $user_id));
+                        $success_message = "Deleted all recipes for {$target_user->display_name}";
+                    }
+                }
+                break;
+    
+            case 'delete_user_and_recipes':
+                if (current_user_can('manage_options')) {
+                    $target_user = get_userdata($user_id);
+                    if ($target_user) {
+                        global $wpdb;
+                        // Delete postmeta first
+                        $wpdb->query($wpdb->prepare("
+                            DELETE pm FROM {$wpdb->postmeta} pm
+                            JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+                            WHERE p.post_author = %d AND p.post_type = 'recipe'
+                        ", $user_id));
+                        // Delete posts
+                        $wpdb->query($wpdb->prepare("
+                            DELETE FROM {$wpdb->posts}
+                            WHERE post_author = %d AND post_type = 'recipe'
+                        ", $user_id));
+                        // Delete user
+                        require_once(ABSPATH . 'wp-admin/includes/user.php');
+                        wp_delete_user($user_id);
+                        $success_message = "Deleted user {$target_user->display_name} and all their recipes";
+                    }
+                }
+                break;
     }
 }
 
@@ -496,4 +541,59 @@ get_header();
     
 </div>
 
+<?php if (current_user_can('manage_options')): ?>
+    <!-- Admin: User Management -->
+    <div class="permissions-section" style="border-color: #d63638;">
+        <h2 style="border-color: #d63638;">🔐 Admin: User Management</h2>
+        <p style="color: #666; font-size: 14px;">Delete users and/or their recipe collections. <strong>These actions cannot be undone.</strong></p>
+        
+        <?php
+        $all_manageable_users = get_users(array(
+            'exclude' => array($current_user_id),
+            'orderby' => 'display_name',
+            'order' => 'ASC',
+            'role__not_in' => array('administrator')
+        ));
+        ?>
+        
+        <?php if (!empty($all_manageable_users)): ?>
+        <ul class="user-list">
+            <?php foreach ($all_manageable_users as $managed_user): 
+                $recipe_count = count_user_posts($managed_user->ID, 'recipe');
+            ?>
+            <li class="user-item">
+                <div class="user-info">
+                    <span class="user-name"><?php echo esc_html($managed_user->display_name); ?></span>
+                    <span class="user-role"><?php echo esc_html($managed_user->user_login); ?> &bull; <?php echo esc_html($managed_user->user_email); ?></span>
+                    <br>
+                    <span style="font-size: 13px; color: #2271b1;"><?php echo $recipe_count; ?> recipes</span>
+                </div>
+                <div class="user-actions">
+                    <?php if ($recipe_count > 0): ?>
+                    <form method="post" style="display: inline;">
+                        <?php wp_nonce_field('manage_permissions'); ?>
+                        <input type="hidden" name="user_id" value="<?php echo $managed_user->ID; ?>">
+                        <button type="submit" name="action" value="delete_user_recipes" class="btn btn-warning"
+                                onclick="return confirm('Delete ALL <?php echo $recipe_count; ?> recipes for <?php echo esc_js($managed_user->display_name); ?>? This cannot be undone.')">
+                            🗑️ Delete Recipes Only
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                    <form method="post" style="display: inline;">
+                        <?php wp_nonce_field('manage_permissions'); ?>
+                        <input type="hidden" name="user_id" value="<?php echo $managed_user->ID; ?>">
+                        <button type="submit" name="action" value="delete_user_and_recipes" class="btn btn-danger"
+                                onclick="return confirm('DELETE USER <?php echo esc_js($managed_user->display_name); ?> AND all <?php echo $recipe_count; ?> recipes? This cannot be undone.')">
+                            ❌ Delete User + Recipes
+                        </button>
+                    </form>
+                </div>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+        <?php else: ?>
+        <div class="empty-state">No users to manage.</div>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
 <?php get_footer(); ?>
