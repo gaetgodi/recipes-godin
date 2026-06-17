@@ -592,5 +592,9 @@ get_header();
         <?php else: ?>
         <div class="empty-state">No users to manage.</div>
         <?php endif; ?>
-       <?php endif; ?>
+    </div><!-- ends admin permissions-section -->
+    <?php endif; ?><!-- ends manage_options -->
+
+</div><!-- ends .permissions-manager -->
+
 <?php get_footer(); ?>
