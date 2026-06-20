@@ -4,9 +4,16 @@
  *
  * Weekly check that the configured ANTHROPIC_MODEL is still valid.
  * Sends an email warning if the model is retired (live API call fails)
- * or found deprecated with a retirement date (docs page check).
+ * or found deprecated/retiring on Anthropic's status page.
  *
- * @version 1.0.0
+ * @version 1.1.0
+ * @changelog
+ *   1.1.0 - Fixed false positive: Check 2 now requires "Deprecated" or "Retired/Retiring"
+ *            in the surrounding context AND absence of "Active" near the model name,
+ *            instead of flagging on mere presence of the model name on the page.
+ *            (Every active model is also listed on that page, so presence alone
+ *            was triggering warnings for healthy models.)
+ *   1.0.0 - Initial release.
  */
 
 if (!defined('ABSPATH')) exit;
@@ -61,6 +68,11 @@ function recipe_model_health_check_run() {
     }
 
     // --- Check 2: Anthropic deprecations page scrape ---
+    // Note: every active model is also listed on this page, so we can't just
+    // check for presence of the model name. We require "Deprecated" or
+    // "Retired"/"Retiring" to appear near the model name, AND that "Active"
+    // does NOT appear immediately after it (which would mean it's the
+    // Active-status row, not a Deprecated one).
     $docs_response = wp_remote_get('https://platform.claude.com/docs/en/about-claude/model-deprecations', array(
         'timeout' => 20
     ));
@@ -68,12 +80,20 @@ function recipe_model_health_check_run() {
     if (!is_wp_error($docs_response)) {
         $docs_body = wp_remote_retrieve_body($docs_response);
         if (strpos($docs_body, $model) !== false) {
-            // Found a mention of our model on the deprecations page.
-            // Grab surrounding context (500 chars) for the email.
             $pos = strpos($docs_body, $model);
             $context = substr($docs_body, max(0, $pos - 100), 600);
-            $context = wp_strip_all_tags($context);
-            $issues[] = "Model '$model' appears on Anthropic's deprecations page. Context:\n" . $context;
+            $context_clean = wp_strip_all_tags($context);
+
+            // Look only at the text immediately following the model name —
+            // that's where the status column value appears on the real page.
+            $after_name = substr($context_clean, strpos($context_clean, $model) + strlen($model), 200);
+
+            $looks_active = preg_match('/\bActive\b/i', $after_name);
+            $looks_deprecated = preg_match('/\b(Deprecated|Retired|Retiring)\b/i', $after_name);
+
+            if ($looks_deprecated && !$looks_active) {
+                $issues[] = "Model '$model' appears DEPRECATED/RETIRING on Anthropic's status page. Context:\n" . $context_clean;
+            }
         }
     }
 
