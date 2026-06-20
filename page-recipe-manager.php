@@ -137,8 +137,8 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
     
     <!-- Filter Section -->
     <div class="filter-section" style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
-            <label style="font-weight: 600;">Filter by Categories:</label>
+    <div class="filter-inner-row" style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+    <label style="font-weight: 600;">Filter by Categories:</label>
             
             <div style="position: relative;">
                 <button type="button" id="categoryFilterBtn" onclick="toggleCategoryDropdown()" class="action-btn" style="background: #6c757d; color: white; min-width: 200px; text-align: left; position: relative;">
@@ -286,8 +286,8 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
         </div>
         
         <!-- Search Box -->
-        <div style="margin: 15px 0; padding: 15px; background: #fff; border: 2px solid #c84a31; border-radius: 6px; display: flex; align-items: center; gap: 10px;">
-            <label style="font-weight: 600; font-size: 15px;">🔍 Search Recipes:</label>
+        <div class="recipe-search-box" style="margin: 15px 0; padding: 15px; background: #fff; border: 2px solid #c84a31; border-radius: 6px; display: flex; align-items: center; gap: 10px;">
+    <label style="font-weight: 600; font-size: 15px;">🔍 Search Recipes:</label>
             <input 
                 type="text" 
                 id="recipeSearch" 

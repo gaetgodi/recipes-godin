@@ -1,6 +1,10 @@
 /* Recipe Manager Page Styles
- * @version 2.0.0
+ * @version 2.1.0
  * @changelog
+ *   2.1.0 - Mobile fixes: filter section inner row (category filter + Manage Categories
+ *            button) now stacks properly. Search box stacks label/input/Clear vertically.
+ *            ID column hidden in mobile card view (was only hidden at tablet width).
+ *            Checkbox repositioned to sit inline with title instead of its own stacked row.
  *   2.0.0 - Added tablet (768px) and mobile (430px) responsive breakpoints.
  *            Filter section stacks vertically on mobile, table transforms to card layout,
  *            bulk action buttons go full-width and stack on mobile.
@@ -145,6 +149,7 @@
     .recipe-manager-table td:nth-child(2) {
         display: none;
     }
+
     .bulk-actions {
         flex-wrap: wrap;
     }
@@ -182,6 +187,22 @@
         box-sizing: border-box;
         font-size: 16px; /* prevents iOS auto-zoom */
     }
+
+    /* The inner row inside .filter-section that holds the category-filter
+       dropdown button + "Manage Categories" button — stack them too */
+    .filter-inner-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        width: 100%;
+    }
+
+    .filter-inner-row > button,
+    .filter-inner-row > div {
+        width: 100%;
+        box-sizing: border-box;
+        margin-left: 0 !important;
+    }
     /* Collection selector dropdown — kill the fixed min-width that forces horizontal scroll */
     #collection-selector {
         min-width: 0 !important;
@@ -203,6 +224,20 @@
         box-sizing: border-box;
         left: 0;
     }
+
+    /* Search box — stack label, input, and Clear button vertically */
+    .recipe-search-box {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .recipe-search-box input,
+    .recipe-search-box button {
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
     /* --- Table → card layout --- */
     .recipe-manager-table,
     .recipe-manager-table thead,
@@ -219,10 +254,11 @@
     }
 
     .recipe-manager-table tbody tr {
+        position: relative;
         border: 1px solid #ddd;
         border-radius: 6px;
         margin-bottom: 12px;
-        padding: 10px;
+        padding: 10px 10px 10px 40px; /* left padding makes room for the checkbox */
         background: white;
         box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
@@ -247,10 +283,23 @@
         flex-shrink: 0;
     }
 
-    /* Checkbox column — no label needed */
+    /* Checkbox column — pull out of normal flow, pin to top-left of card */
+    .recipe-manager-table td:first-child {
+        position: absolute;
+        top: 12px;
+        left: 10px;
+        padding: 0;
+        width: auto;
+        display: block;
+    }
+
     .recipe-manager-table td:first-child::before {
-        content: '';
-        min-width: 0;
+        content: none;
+    }
+
+    /* Hide the ID row in mobile card view (was only hidden at tablet width) */
+    .recipe-manager-table td:nth-child(2) {
+        display: none;
     }
 
     /* --- Bulk actions --- */
