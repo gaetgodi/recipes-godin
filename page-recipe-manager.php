@@ -4,8 +4,10 @@
  *
  * Complete recipe management interface with filtering, bulk actions, and printing
  *
- * @version 2.1.1
+ * @version 2.1.2
  * @changelog
+ *   2.1.2 - Admins can now use "Copy to My Recipes" on any collection, not just
+ *            view-only viewers. Added title tooltips to Copy and Copy to My Recipes buttons.
  *   2.1.1 - Share button now visible to all logged-in users viewing their own collection,
  *            not just users with edit_posts capability. Fixes subscriber sharing.
  *   2.1.0 - Share recipient list now includes authors who are in YOUR viewers list,
@@ -314,15 +316,17 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                 🖨️ Print Book
             </button>
             
-            <?php if ($can_view_only && $selected_collection !== get_current_user_id()): ?>
-            <button type="submit" name="bulk_action" value="copy_to_my_recipes" class="action-btn" style="background: #3498db; color: white;" id="copyToMyBtnTop" disabled>
+            <?php if (($can_view_only || $is_admin) && $selected_collection !== get_current_user_id()): ?>
+            <button type="submit" name="bulk_action" value="copy_to_my_recipes" class="action-btn" style="background: #3498db; color: white;" id="copyToMyBtnTop" disabled
+                    title="This makes a copy in my collection">
                 📋 Copy to My Recipes
             </button>
             <?php endif; ?>
             
             <?php if (current_user_can('edit_posts') && $can_manage): ?>
             <button type="submit" name="bulk_action" value="copy" class="action-btn btn-copy" id="copyBtnTop" disabled 
-                    onclick="return confirm('Copy the first selected recipe?')">
+                    onclick="return confirm('Copy the first selected recipe?')"
+                    title="This makes another copy here">
                 📋 Copy
             </button>
             
@@ -414,15 +418,17 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                 🖨️ Print Book
             </button>
             
-            <?php if ($can_view_only && $selected_collection !== get_current_user_id()): ?>
-            <button type="submit" name="bulk_action" value="copy_to_my_recipes" class="action-btn" style="background: #3498db; color: white;" id="copyToMyBtn" disabled>
+            <?php if (($can_view_only || $is_admin) && $selected_collection !== get_current_user_id()): ?>
+            <button type="submit" name="bulk_action" value="copy_to_my_recipes" class="action-btn" style="background: #3498db; color: white;" id="copyToMyBtn" disabled
+                    title="This makes a copy in my collection">
                 📋 Copy to My Recipes
             </button>
             <?php endif; ?>
             
             <?php if (current_user_can('edit_posts') && $can_manage): ?>
             <button type="submit" name="bulk_action" value="copy" class="action-btn btn-copy" id="copyBtn" disabled 
-                    onclick="return confirm('Copy the first selected recipe?')">
+                    onclick="return confirm('Copy the first selected recipe?')"
+                    title="This makes another copy here">
                 📋 Copy
             </button>
             
