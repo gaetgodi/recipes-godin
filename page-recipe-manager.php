@@ -548,7 +548,24 @@ function closeShareDialog() {
     if (dialog) dialog.remove();
 }
 
+flet shareInProgress = false;
+
 function executeShare() {
+    if (shareInProgress) {
+        return;
+    }
+    shareInProgress = true;
+    
+    const dialog = document.getElementById('shareDialog');
+    if (dialog) {
+        dialog.innerHTML = `
+            <div style="background: white; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%; text-align: center;">
+                <h2 style="margin-top: 0;">⏳ Sharing in progress...</h2>
+                <p style="color: #666;">This may take a moment for large collections. Please don't close this window or click again.</p>
+            </div>
+        `;
+    }
+    
     const recipientId = document.getElementById('shareRecipient').value;
     
     const form = document.getElementById('recipeManagerForm');
