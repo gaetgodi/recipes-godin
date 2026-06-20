@@ -141,11 +141,10 @@
     }
 
     /* Hide ID column to save space */
-    .recipe-manager-table th:nth-child(1),
-    .recipe-manager-table td:nth-child(1) {
+    .recipe-manager-table th:nth-child(2),
+    .recipe-manager-table td:nth-child(2) {
         display: none;
     }
-
     .bulk-actions {
         flex-wrap: wrap;
     }
