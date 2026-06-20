@@ -94,12 +94,21 @@ get_header();
                 
                 <div class="form-group">
                     <label for="pwd">Password</label>
-                    <input type="password" name="pwd" id="pwd" required autocomplete="current-password">
+                    <div style="position: relative;">
+                        <input type="password" name="pwd" id="pwd" required autocomplete="current-password" style="width: 100%; padding-right: 70px; box-sizing: border-box;">
+                        <button type="button" onclick="togglePasswordVisibility()" id="togglePwdBtn"
+                                style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #2271b1; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 6px;">
+                            Show
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="remember-me">
                     <input type="checkbox" name="rememberme" id="rememberme" value="1">
                     <label for="rememberme">Remember me</label>
+                    <div style="font-size: 12px; color: #666; margin-top: 4px; margin-left: 24px;">
+                        Keeps you logged in on this device for about 2 weeks, instead of just this browser session.
+                    </div>
                 </div>
                 
                 <button type="submit" name="login_submit" class="btn-login">
@@ -115,5 +124,22 @@ get_header();
         </div>
     </div>
 </div>
+
+<script>
+function togglePasswordVisibility() {
+    const pwdField = document.getElementById('pwd');
+    const btn = document.getElementById('togglePwdBtn');
+    
+    if (pwdField.type === 'password') {
+        pwdField.type = 'text';
+        btn.textContent = 'Hide';
+    } else {
+        pwdField.type = 'password';
+        btn.textContent = 'Show';
+    }
+}
+</script>
+
+<?php get_footer(); ?>
 
 <?php get_footer(); ?>
