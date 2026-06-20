@@ -347,12 +347,12 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
         <table class="recipe-manager-table">
             <thead>
                 <tr>
-                    <th style="width: 50px;">
-                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
-                    </th>
-                    <th style="width: 80px;">ID</th>
-                    <th>Recipe Title</th>
-                    <th style="width: 200px;">Category</th>
+                <th>
+    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+</th>
+<th>ID</th>
+<th>Recipe Title</th>
+<th>Category</th>
                 </tr>
             </thead>
             <tbody>
