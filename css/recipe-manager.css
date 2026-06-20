@@ -244,17 +244,18 @@
         display: block;
     }
 
-    .recipe-manager-table thead,
-    .recipe-manager-table tbody tr {
-        display: flex;
-        align-items: center;
-    }
-
     .recipe-manager-table thead {
+        display: block;
         background: #c84a31;
         border-radius: 4px;
         padding: 5px 8px;
         margin-bottom: 4px;
+    }
+    
+    .recipe-manager-table thead tr,
+    .recipe-manager-table tbody tr {
+        display: flex;
+        align-items: center;
     }
 
     .recipe-manager-table thead th,
