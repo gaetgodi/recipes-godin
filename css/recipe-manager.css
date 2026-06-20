@@ -237,64 +237,81 @@
         width: 100%;
         box-sizing: border-box;
     }
-    
-    /* --- Table → card layout --- */
+
+    /* --- Table → 2-column layout: checkbox + title only --- */
     .recipe-manager-table,
-    .recipe-manager-table thead,
-    .recipe-manager-table tbody,
-    .recipe-manager-table th,
-    .recipe-manager-table td,
-    .recipe-manager-table tr {
+    .recipe-manager-table tbody {
         display: block;
     }
 
-    /* Hide the header row — labels come from data-label on each td */
+    .recipe-manager-table thead,
+    .recipe-manager-table tbody tr {
+        display: flex;
+        align-items: center;
+    }
+
     .recipe-manager-table thead {
+        background: #c84a31;
+        border-radius: 4px;
+        padding: 5px 8px;
+        margin-bottom: 4px;
+    }
+
+    .recipe-manager-table thead th,
+    .recipe-manager-table tbody td {
+        display: block;
+        box-sizing: border-box;
+        border: none;
+    }
+
+    .recipe-manager-table thead th {
+        color: white;
+        font-size: 11px;
+        font-weight: normal;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        text-align: left;
+        padding: 0;
+    }
+
+    .recipe-manager-table tbody td {
+        font-size: 14px;
+        padding: 1px 0;
+    }
+
+    .recipe-manager-table thead th:first-child,
+    .recipe-manager-table tbody td:first-child {
+        flex: 0 0 22px;
+    }
+
+    .recipe-manager-table thead th:nth-child(3),
+    .recipe-manager-table tbody td:nth-child(3) {
+        flex: 1 1 auto;
+        word-break: break-word;
+        padding-left: 6px;
+    }
+
+    .recipe-manager-table thead th:nth-child(2),
+    .recipe-manager-table tbody td:nth-child(2),
+    .recipe-manager-table thead th:nth-child(4),
+    .recipe-manager-table tbody td:nth-child(4) {
         display: none;
     }
 
-    .recipe-manager-table tbody tr {
-        position: relative;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        margin-bottom: 12px;
-        padding: 10px 10px 10px 40px; /* left padding makes room for the checkbox */
-        background: white;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    }
-
-    .recipe-manager-table td {
-        padding: 6px 4px;
-        border: none;
-        font-size: 14px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    /* Label prefix from data-label attribute */
-    .recipe-manager-table td::before {
-        content: attr(data-label);
-        font-weight: bold;
-        color: #c84a31;
-        min-width: 80px;
-        font-size: 12px;
-        text-transform: uppercase;
-        flex-shrink: 0;
-    }
-
-    /* Checkbox column — pull out of normal flow, pin to top-left of card */
-    .recipe-manager-table td:first-child {
-        position: absolute;
-        top: 12px;
-        left: 10px;
-        padding: 0;
-        width: auto;
+    .recipe-manager-table input[type="checkbox"] {
+        width: 15px;
+        height: 15px;
         display: block;
     }
 
-    .recipe-manager-table td:first-child::before {
-        content: none;
+    .recipe-manager-table tbody tr {
+        border-bottom: 1px solid #eee;
+        padding: 2px 0;
+        align-items: flex-start;
+    }
+
+    .recipe-manager-table tbody tr:last-child {
+        border-bottom: none;
     }
 
     /* Hide the ID row in mobile card view (was only hidden at tablet width) */
