@@ -3,8 +3,12 @@
  * Recipe Image Upload and OCR Handler
  * Handles featured image upload and Claude API OCR extraction
  *
- * @version 2.1.3
+ * @version 2.1.4
  * @changelog
+ *   2.1.4 - Replaced hardcoded model string 'claude-sonnet-4-20250514' (retired June 15,
+ *            2026) with ANTHROPIC_MODEL constant, defined in wp-config.php. All three
+ *            API calls (image extraction, text extraction, translation) now reference
+ *            the constant so future model swaps require editing only one line.
  *   2.1.3 - Translation timeout increased to 60s, max_tokens to 3000 to handle
  *            verbose scripts like Gujarati without timing out.
  *   2.1.2 - parse_recipe_extraction() method regex stops at NOTES:.
@@ -180,7 +184,7 @@ If any part is illegible or crossed out, note it with [unclear] rather than gues
     
     // Prepare the API request
     $request_body = array(
-        'model' => 'claude-sonnet-4-20250514',
+        'model' => ANTHROPIC_MODEL,
         'max_tokens' => 2000,
         'messages' => array(
             array(
@@ -323,7 +327,7 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
     }
     
     $request_body = array(
-        'model' => 'claude-sonnet-4-20250514',
+        'model' => ANTHROPIC_MODEL,
         'max_tokens' => 3000,
         'messages' => array(
             array(
@@ -519,7 +523,7 @@ Here is the text:
     
     // Prepare the API request to extract recipe from text
     $request_body = array(
-        'model' => 'claude-sonnet-4-20250514',
+        'model' => ANTHROPIC_MODEL,
         'max_tokens' => 2000,
         'messages' => array(
             array(
