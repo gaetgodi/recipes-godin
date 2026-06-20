@@ -296,8 +296,13 @@ while ($recipes->have_posts()):
     $method = get_post_meta($post_id, '_recipe_method', true);
     $notes = get_post_meta($post_id, '_recipe_notes', true);
     
-    $terms = get_the_terms($post_id, 'recipe_category');
-    $category = ($terms && !is_wp_error($terms)) ? $terms[0]->name : 'Uncategorized';
+    $recipe_cats = get_recipe_categories($post_id);
+    if (!empty($recipe_cats)) {
+        $category_names = array_map(function($cat) { return $cat->cat_name; }, $recipe_cats);
+        $category = implode(', ', $category_names);
+    } else {
+        $category = 'Uncategorized';
+    }
 ?>
 
 <div class="recipe-item">
