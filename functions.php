@@ -302,3 +302,4 @@ add_action('wp_enqueue_scripts', 'enqueue_recipe_page_styles');
 
 // Load recipe image upload handler for AJAX
 require_once(get_stylesheet_directory() . '/recipe-image-upload-handler.php');
+require_once(get_stylesheet_directory() . '/recipe-model-health-check.php');
