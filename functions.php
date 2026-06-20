@@ -10,20 +10,6 @@ if (!defined('ABSPATH')) exit;
 require_once(get_stylesheet_directory() . '/custom-category-functions.php');
 
 /**
- * Display header ticker on all pages except Print Book
- */
-function display_recipe_header_ticker() {
-    // Don't show on Print Book page
-    if (is_page('print-book')) {
-        return;
-    }
-    
-    // Include the header ticker
-    get_template_part('header-ticker');
-}
-add_action('et_before_main_content', 'display_recipe_header_ticker');
-
-/**
  * Enqueue parent and child theme styles
  */
 function divi_recipe_child_enqueue_styles() {

@@ -182,7 +182,27 @@
         box-sizing: border-box;
         font-size: 16px; /* prevents iOS auto-zoom */
     }
+    /* Collection selector dropdown — kill the fixed min-width that forces horizontal scroll */
+    #collection-selector {
+        min-width: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box;
+    }
 
+    /* Category filter button — same fix */
+    #categoryFilterBtn {
+        min-width: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+
+    /* Category dropdown panel — make sure it doesn't overflow either */
+    #categoryDropdown {
+        min-width: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box;
+        left: 0;
+    }
     /* --- Table → card layout --- */
     .recipe-manager-table,
     .recipe-manager-table thead,
