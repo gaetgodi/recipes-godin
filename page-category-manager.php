@@ -324,26 +324,18 @@ $categories = get_user_categories_with_counts($collection_id);
         border-bottom: 1px solid #eee;
         padding: 8px 4px;
     }
-    .category-row {
-        display: flex;
-        flex-wrap: wrap;
+
+    .category-row td {
+        display: block;
+        padding: 1px 0;
+        border: none;
     }
 
     .category-row .category-name-cell {
         font-size: 14px;
-        flex: 1 1 auto;
-    }
-
-    .category-row .category-count-cell {
-        font-size: 12px;
-        color: #666;
-        flex: 0 0 auto;
-        margin-left: 6px;
-        align-self: center;
     }
 
     .category-row .category-actions-cell {
-        flex: 1 0 100%;
         display: flex;
         justify-content: center;
         gap: 8px;
@@ -351,24 +343,21 @@ $categories = get_user_categories_with_counts($collection_id);
         width: 60%;
     }
 
-    .category-row .category-actions-cell form {
-        flex: 1;
+    .category-row .category-actions-cell form,
+    .category-row .category-actions-cell > .btn {
+        flex: 1 1 0;
+        display: flex;
     }
 
-    .category-row .btn {
+    .category-row .category-actions-cell .btn {
         width: 100%;
         text-align: center;
+        justify-content: center;
         box-sizing: border-box;
         padding: 6px 4px;
         font-size: 13px;
+        display: inline-flex;
     }
-    .category-row td {
-        display: block;
-        padding: 1px 0;
-        border: none;
-    }
-
-    
 
     /* Edit row — stack the inline edit form */
     .edit-row td {
@@ -437,11 +426,9 @@ $categories = get_user_categories_with_counts($collection_id);
                 <!-- View Row -->
                 <tr id="view-<?php echo $cat->cat_id; ?>" class="category-row">
                     <td class="category-name-cell" style="word-wrap: break-word; word-break: break-word;">
-                        <strong><?php echo esc_html($cat->cat_name); ?></strong>
+                        <strong><?php echo esc_html($cat->cat_name); ?></strong> <span class="category-count">(<?php echo $cat->recipe_count; ?>)</span>
                     </td>
-                    <td class="category-count-cell">
-                        <span class="category-count"><?php echo $cat->recipe_count; ?></span>
-                    </td>
+                    <td class="category-count-cell" style="display: none;"></td>
                     <td class="category-actions-cell">
                         <button onclick="editCategory(<?php echo $cat->cat_id; ?>)" class="btn btn-edit">
                             ✏️ Edit
