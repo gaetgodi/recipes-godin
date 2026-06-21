@@ -277,6 +277,105 @@ $categories = get_user_categories_with_counts($collection_id);
 .back-link:hover {
     text-decoration: underline;
 }
+
+/* ============================================================
+   MOBILE — max-width: 430px
+   ============================================================ */
+@media (max-width: 430px) {
+
+    .category-manager {
+        padding: 0 12px;
+        margin: 10px auto;
+    }
+
+    .category-manager h1 {
+        font-size: 22px;
+    }
+
+    .add-category-section {
+        padding: 12px;
+    }
+
+    .add-category-form {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .add-category-form input[type="text"],
+    .add-category-form button {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Table → stacked cards, tight padding to minimize scroll */
+    .categories-table,
+    .categories-table tbody {
+        display: block;
+        box-shadow: none;
+    }
+
+    .categories-table thead {
+        display: none;
+    }
+
+    .category-row {
+        display: block;
+        border-bottom: 1px solid #eee;
+        padding: 8px 4px;
+    }
+
+    .category-row td {
+        display: block;
+        padding: 1px 0;
+        border: none;
+    }
+
+    .category-row .category-name-cell {
+        font-size: 14px;
+    }
+
+    .category-row .category-count-cell {
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 4px;
+    }
+
+    .category-row .category-actions-cell {
+        display: flex;
+        gap: 6px;
+        margin-top: 4px;
+    }
+
+    .category-row .category-actions-cell form {
+        flex: 1;
+    }
+
+    .category-row .btn {
+        width: 100%;
+        text-align: center;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        font-size: 13px;
+    }
+
+    /* Edit row — stack the inline edit form */
+    .edit-row td {
+        padding: 8px 4px;
+    }
+
+    .edit-form {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+
+    .edit-form input[type="text"],
+    .edit-form button {
+        width: 100%;
+        box-sizing: border-box;
+    }
+}
 </style>
 
 <div class="category-manager">
@@ -325,14 +424,14 @@ $categories = get_user_categories_with_counts($collection_id);
             <?php if (!empty($categories)): ?>
                 <?php foreach ($categories as $cat): ?>
                 <!-- View Row -->
-                <tr id="view-<?php echo $cat->cat_id; ?>">
-                    <td style="word-wrap: break-word; word-break: break-word;">
+                <tr id="view-<?php echo $cat->cat_id; ?>" class="category-row">
+                    <td class="category-name-cell" style="word-wrap: break-word; word-break: break-word;">
                         <strong><?php echo esc_html($cat->cat_name); ?></strong>
                     </td>
-                    <td>
+                    <td class="category-count-cell">
                         <span class="category-count"><?php echo $cat->recipe_count; ?></span>
                     </td>
-                    <td>
+                    <td class="category-actions-cell">
                         <button onclick="editCategory(<?php echo $cat->cat_id; ?>)" class="btn btn-edit">
                             ✏️ Edit
                         </button>
