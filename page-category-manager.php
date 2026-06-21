@@ -324,27 +324,31 @@ $categories = get_user_categories_with_counts($collection_id);
         border-bottom: 1px solid #eee;
         padding: 8px 4px;
     }
-
-    .category-row td {
-        display: block;
-        padding: 1px 0;
-        border: none;
+    .category-row {
+        display: flex;
+        flex-wrap: wrap;
     }
 
     .category-row .category-name-cell {
         font-size: 14px;
+        flex: 1 1 auto;
     }
 
     .category-row .category-count-cell {
         font-size: 12px;
         color: #666;
-        margin-bottom: 4px;
+        flex: 0 0 auto;
+        margin-left: 6px;
+        align-self: center;
     }
 
     .category-row .category-actions-cell {
+        flex: 1 0 100%;
         display: flex;
-        gap: 6px;
-        margin-top: 4px;
+        justify-content: center;
+        gap: 8px;
+        margin: 6px auto 0;
+        width: 60%;
     }
 
     .category-row .category-actions-cell form {
@@ -355,9 +359,16 @@ $categories = get_user_categories_with_counts($collection_id);
         width: 100%;
         text-align: center;
         box-sizing: border-box;
-        padding: 6px 8px;
+        padding: 6px 4px;
         font-size: 13px;
     }
+    .category-row td {
+        display: block;
+        padding: 1px 0;
+        border: none;
+    }
+
+    
 
     /* Edit row — stack the inline edit form */
     .edit-row td {
