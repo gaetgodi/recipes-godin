@@ -556,6 +556,8 @@ function executeShare() {
     }
     shareInProgress = true;
     
+    const recipientId = document.getElementById('shareRecipient').value;
+    
     const dialog = document.getElementById('shareDialog');
     if (dialog) {
         dialog.innerHTML = `
@@ -565,8 +567,6 @@ function executeShare() {
             </div>
         `;
     }
-    
-    const recipientId = document.getElementById('shareRecipient').value;
     
     const form = document.getElementById('recipeManagerForm');
     const input = document.createElement('input');
