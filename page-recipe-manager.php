@@ -548,7 +548,7 @@ function closeShareDialog() {
     if (dialog) dialog.remove();
 }
 
-flet shareInProgress = false;
+let shareInProgress = false;
 
 function executeShare() {
     if (shareInProgress) {
