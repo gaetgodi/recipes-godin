@@ -353,6 +353,64 @@ get_header();
     font-size: 14px;
     color: #666;
 }
+
+/* ============================================================
+   MOBILE — max-width: 430px
+   ============================================================ */
+@media (max-width: 430px) {
+
+    .permissions-manager {
+        padding: 0 12px;
+        margin: 10px auto;
+    }
+
+    .user-item {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .user-info {
+        margin-bottom: 4px;
+    }
+
+    .user-role {
+        display: block;
+        margin-left: 0;
+        margin-top: 4px;
+    }
+
+    .user-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+    }
+
+    .user-actions form {
+        width: 100%;
+    }
+
+    .user-actions .btn {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px;
+        font-size: 14px;
+    }
+
+    .stats {
+        flex-direction: column;
+    }
+
+    .grant-form select {
+        width: 100%;
+        margin-right: 0;
+        margin-bottom: 10px;
+        box-sizing: border-box;
+    }
+}
+
 </style>
 
 <div class="permissions-manager">
