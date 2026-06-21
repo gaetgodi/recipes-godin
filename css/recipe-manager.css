@@ -337,4 +337,19 @@
     .recipe-count {
         font-size: 13px;
     }
+    /* Header row: stack title above logout button, keep button text on one line */
+    .page-header-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .page-header-row h1 {
+        font-size: 18px;
+        word-break: break-word;
+    }
+
+    .page-header-row a {
+        white-space: nowrap;
+    }
 }

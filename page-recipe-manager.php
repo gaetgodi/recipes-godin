@@ -26,13 +26,13 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
 ?>
 
 <div class="recipe-manager">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h1 style="margin: 0;"><?php echo esc_html($current_user->display_name); ?>'s Recipe Manager</h1>
-        <a href="<?php echo wp_logout_url(home_url('/login/')); ?>" 
-           style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; font-weight: 600;">
-            🚪 Log Out
-        </a>
-    </div>
+<div class="page-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1 style="margin: 0;"><?php echo esc_html($current_user->display_name); ?>'s Recipe Manager</h1>
+    <a href="<?php echo wp_logout_url(home_url('/login/')); ?>" 
+       style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; font-weight: 600;">
+        🚪 Log Out
+    </a>
+</div>
     
     <?php
     // Include permission functions
