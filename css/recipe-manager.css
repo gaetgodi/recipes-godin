@@ -139,8 +139,7 @@
     }
 
     .filter-section select,
-    .filter-section input {
-        width: 100%;
+    .filter-section input:not([type="checkbox"]) {
         box-sizing: border-box;
     }
 
@@ -182,7 +181,7 @@
     }
 
     .filter-section select,
-    .filter-section input {
+    .filter-section input:not([type="checkbox"]) {
         width: 100%;
         box-sizing: border-box;
         font-size: 16px; /* prevents iOS auto-zoom */
