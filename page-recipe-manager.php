@@ -4,8 +4,12 @@
  *
  * Complete recipe management interface with filtering, bulk actions, and printing
  *
- * @version 2.1.2
+ * @version 2.2.0
  * @changelog
+ *   2.2.0 - Split category filtering into two independent groups: Food Categories
+ *            and Author. OR within each group, AND between groups. Search term
+ *            and both filter groups now persist across navigation to view/edit
+ *            a recipe and back, via URL parameters (food_cat, author_cat, s).
  *   2.1.2 - Admins can now use "Copy to My Recipes" on any collection, not just
  *            view-only viewers. Added title tooltips to Copy and Copy to My Recipes buttons.
  *   2.1.1 - Share button now visible to all logged-in users viewing their own collection,
@@ -66,6 +70,37 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
     $is_admin = current_user_can('administrator');
     $can_manage = $is_admin || (isset($current_collection) ? $current_collection['can_manage'] : $is_owner);
     $can_view_only = isset($current_collection) ? (!$current_collection['can_manage'] && $current_collection['can_view']) : false;
+    
+    // --- Persisted filter/search state, used to build every outbound link below ---
+    $food_cat_ids = !empty($_GET['food_cat']) ? array_map('intval', explode(',', $_GET['food_cat'])) : array();
+    $author_cat_ids = !empty($_GET['author_cat']) ? array_map('intval', explode(',', $_GET['author_cat'])) : array();
+    $search_term = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
+    
+    /**
+     * Build a query-string fragment carrying the current filter/search state,
+     * for appending to any link that should preserve it (view, edit, etc.)
+     * Returns a string starting with '&' or '' if there's nothing to carry.
+     */
+    function recipe_manager_state_query_args($food_cat_ids, $author_cat_ids, $search_term, $collection_id, $current_user_id) {
+        $parts = array();
+        if (!empty($food_cat_ids)) {
+            $parts[] = 'food_cat=' . implode(',', $food_cat_ids);
+        }
+        if (!empty($author_cat_ids)) {
+            $parts[] = 'author_cat=' . implode(',', $author_cat_ids);
+        }
+        if (!empty($search_term)) {
+            $parts[] = 's=' . rawurlencode($search_term);
+        }
+        if ($collection_id != $current_user_id) {
+            $parts[] = 'collection=' . intval($collection_id);
+        }
+        return empty($parts) ? '' : '&' . implode('&', $parts);
+    }
+    
+    $state_query = recipe_manager_state_query_args($food_cat_ids, $author_cat_ids, $search_term, $selected_collection, $current_user_id);
+    // Version without leading '&', for building a fresh '?...' URL from scratch
+    $state_query_no_amp = ltrim($state_query, '&');
     ?>
     
     <!-- Copy Error Message -->
@@ -137,37 +172,58 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
     
     <!-- Filter Section -->
     <div class="filter-section" style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-    <div class="filter-inner-row" style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
-    <label style="font-weight: 600;">Filter by Categories:</label>
+        <div class="filter-inner-row" style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px; flex-wrap: wrap;">
+            <label style="font-weight: 600;">Filter by Food Category:</label>
             
             <div style="position: relative;">
-                <button type="button" id="categoryFilterBtn" onclick="toggleCategoryDropdown()" class="action-btn" style="background: #6c757d; color: white; min-width: 200px; text-align: left; position: relative;">
-                    <span id="filterBtnText">Select Categories</span>
+                <button type="button" id="foodCategoryFilterBtn" onclick="toggleDropdown('foodCategoryDropdown')" class="action-btn" style="background: #6c757d; color: white; min-width: 200px; text-align: left; position: relative;">
+                    <span id="foodFilterBtnText"><?php echo !empty($food_cat_ids) ? count($food_cat_ids) . ' selected' : 'Select Categories'; ?></span>
                     <span style="float: right;">▼</span>
                 </button>
                 
-                <div id="categoryDropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 250px; max-height: 400px; overflow-y: auto; z-index: 1000; margin-top: 5px;">
+                <div id="foodCategoryDropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 250px; max-height: 400px; overflow-y: auto; z-index: 1000; margin-top: 5px;">
                     <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
                         <strong>Select one or more:</strong>
-                        <button type="button" onclick="clearFilters()" class="action-btn" style="background: #dc3545; color: white; padding: 4px 12px; font-size: 12px;">
-                            Clear All
+                        <button type="button" onclick="clearFilterGroup('food')" class="action-btn" style="background: #dc3545; color: white; padding: 4px 12px; font-size: 12px;">
+                            Clear
                         </button>
                     </div>
                     <?php
-                    $categories = get_user_categories_with_counts($selected_collection);
-                    
-                    $current_cats = array();
-                    if (!empty($_GET['recipe_cat'])) {
-                        $cat_string = $_GET['recipe_cat'];
-                        $current_cats = array_map('intval', explode(',', $cat_string));
-                    }
-                    
-                    foreach ($categories as $cat) {
+                    $food_categories = get_user_categories_with_counts($selected_collection, 'food');
+                    foreach ($food_categories as $cat) {
                         if ($cat->recipe_count == 0) continue;
-                        
-                        $checked = in_array($cat->cat_id, $current_cats) ? 'checked' : '';
+                        $checked = in_array($cat->cat_id, $food_cat_ids) ? 'checked' : '';
                         echo '<label style="display: block; padding: 8px 15px; cursor: pointer; border-bottom: 1px solid #f0f0f0;" onmouseover="this.style.background=\'#f8f9fa\'" onmouseout="this.style.background=\'white\'">';
-                        echo '<input type="checkbox" name="category_filters[]" value="' . $cat->cat_id . '" ' . $checked . ' onchange="applyFiltersInstantly()" style="margin-right: 8px;">';
+                        echo '<input type="checkbox" name="food_cat_filters[]" value="' . $cat->cat_id . '" ' . $checked . ' onchange="applyFiltersInstantly()" style="margin-right: 8px;">';
+                        echo esc_html($cat->cat_name) . ' <span style="color: #6c757d;">(' . $cat->recipe_count . ')</span>';
+                        echo '</label>';
+                    }
+                    ?>
+                </div>
+            </div>
+            
+            <label style="font-weight: 600;">Filter by Author:</label>
+            
+            <div style="position: relative;">
+                <button type="button" id="authorCategoryFilterBtn" onclick="toggleDropdown('authorCategoryDropdown')" class="action-btn" style="background: #6c757d; color: white; min-width: 200px; text-align: left; position: relative;">
+                    <span id="authorFilterBtnText"><?php echo !empty($author_cat_ids) ? count($author_cat_ids) . ' selected' : 'Select Authors'; ?></span>
+                    <span style="float: right;">▼</span>
+                </button>
+                
+                <div id="authorCategoryDropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 250px; max-height: 400px; overflow-y: auto; z-index: 1000; margin-top: 5px;">
+                    <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                        <strong>Select one or more:</strong>
+                        <button type="button" onclick="clearFilterGroup('author')" class="action-btn" style="background: #dc3545; color: white; padding: 4px 12px; font-size: 12px;">
+                            Clear
+                        </button>
+                    </div>
+                    <?php
+                    $author_categories = get_user_categories_with_counts($selected_collection, 'author');
+                    foreach ($author_categories as $cat) {
+                        if ($cat->recipe_count == 0) continue;
+                        $checked = in_array($cat->cat_id, $author_cat_ids) ? 'checked' : '';
+                        echo '<label style="display: block; padding: 8px 15px; cursor: pointer; border-bottom: 1px solid #f0f0f0;" onmouseover="this.style.background=\'#f8f9fa\'" onmouseout="this.style.background=\'white\'">';
+                        echo '<input type="checkbox" name="author_cat_filters[]" value="' . $cat->cat_id . '" ' . $checked . ' onchange="applyFiltersInstantly()" style="margin-right: 8px;">';
                         echo esc_html($cat->cat_name) . ' <span style="color: #6c757d;">(' . $cat->recipe_count . ')</span>';
                         echo '</label>';
                     }
@@ -189,22 +245,25 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
         </div>
         
         <!-- Active Filter Pills -->
-        <?php if (!empty($current_cats)): ?>
+        <?php if (!empty($food_cat_ids) || !empty($author_cat_ids)): ?>
         <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
             <span style="font-size: 14px; color: #666; padding: 4px 0;">Active filters:</span>
             <?php 
-            foreach ($categories as $cat) {
-                if (in_array($cat->cat_id, $current_cats)) {
-                    $remove_url = home_url('/recipe-manager/');
-                    $remaining_cats = array_diff($current_cats, array($cat->cat_id));
-                    if (!empty($remaining_cats)) {
-                        $remove_url .= '?recipe_cat=' . implode(',', $remaining_cats);
-                    }
-                    if ($selected_collection != get_current_user_id()) {
-                        $remove_url .= (strpos($remove_url, '?') !== false ? '&' : '?') . 'collection=' . $selected_collection;
-                    }
-                    
+            foreach ($food_categories as $cat) {
+                if (in_array($cat->cat_id, $food_cat_ids)) {
+                    $remaining = array_diff($food_cat_ids, array($cat->cat_id));
+                    $remove_url = home_url('/recipe-manager/?' . ltrim(recipe_manager_state_query_args($remaining, $author_cat_ids, $search_term, $selected_collection, $current_user_id), '&'));
                     echo '<span style="display: inline-flex; align-items: center; background: #007bff; color: white; padding: 4px 10px; border-radius: 12px; font-size: 13px; gap: 6px;">';
+                    echo esc_html($cat->cat_name);
+                    echo '<a href="' . esc_url($remove_url) . '" style="color: white; text-decoration: none; font-weight: bold; font-size: 16px;" title="Remove filter">×</a>';
+                    echo '</span>';
+                }
+            }
+            foreach ($author_categories as $cat) {
+                if (in_array($cat->cat_id, $author_cat_ids)) {
+                    $remaining = array_diff($author_cat_ids, array($cat->cat_id));
+                    $remove_url = home_url('/recipe-manager/?' . ltrim(recipe_manager_state_query_args($food_cat_ids, $remaining, $search_term, $selected_collection, $current_user_id), '&'));
+                    echo '<span style="display: inline-flex; align-items: center; background: #28a745; color: white; padding: 4px 10px; border-radius: 12px; font-size: 13px; gap: 6px;">';
                     echo esc_html($cat->cat_name);
                     echo '<a href="' . esc_url($remove_url) . '" style="color: white; text-decoration: none; font-weight: bold; font-size: 16px;" title="Remove filter">×</a>';
                     echo '</span>';
@@ -237,43 +296,44 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
             'order' => 'ASC',
         );
         
-        if (!empty($_GET['recipe_cat'])) {
-            global $wpdb;
-            
-            $cat_string = $_GET['recipe_cat'];
-            $cat_ids = array_map('intval', explode(',', $cat_string));
-            
-            if (count($cat_ids) === 1) {
-                $recipe_ids = $wpdb->get_col($wpdb->prepare(
-                    "SELECT recipe_id FROM {$wpdb->prefix}recipe_category_relationships WHERE cat_id = %d",
-                    $cat_ids[0]
-                ));
-                
-                if (!empty($recipe_ids)) {
-                    $args['post__in'] = $recipe_ids;
-                    $args['orderby'] = 'post__in';
-                } else {
-                    $args['post__in'] = array(0);
-                }
+        global $wpdb;
+        
+        $food_recipe_ids = null;
+        if (!empty($food_cat_ids)) {
+            $placeholders = implode(',', array_fill(0, count($food_cat_ids), '%d'));
+            $food_recipe_ids = $wpdb->get_col($wpdb->prepare("
+                SELECT DISTINCT recipe_id
+                FROM {$wpdb->prefix}recipe_category_relationships
+                WHERE cat_id IN ({$placeholders})
+            ", $food_cat_ids));
+        }
+        
+        $author_recipe_ids = null;
+        if (!empty($author_cat_ids)) {
+            $placeholders = implode(',', array_fill(0, count($author_cat_ids), '%d'));
+            $author_recipe_ids = $wpdb->get_col($wpdb->prepare("
+                SELECT DISTINCT recipe_id
+                FROM {$wpdb->prefix}recipe_category_relationships
+                WHERE cat_id IN ({$placeholders})
+            ", $author_cat_ids));
+        }
+        
+        if ($food_recipe_ids !== null && $author_recipe_ids !== null) {
+            $matching_recipe_ids = array_intersect($food_recipe_ids, $author_recipe_ids);
+        } elseif ($food_recipe_ids !== null) {
+            $matching_recipe_ids = $food_recipe_ids;
+        } elseif ($author_recipe_ids !== null) {
+            $matching_recipe_ids = $author_recipe_ids;
+        } else {
+            $matching_recipe_ids = null;
+        }
+        
+        if ($matching_recipe_ids !== null) {
+            if (!empty($matching_recipe_ids)) {
+                $args['post__in'] = array_values($matching_recipe_ids);
+                $args['orderby'] = 'post__in';
             } else {
-                $placeholders = implode(',', array_fill(0, count($cat_ids), '%d'));
-                
-                $sql = $wpdb->prepare("
-                    SELECT recipe_id
-                    FROM {$wpdb->prefix}recipe_category_relationships
-                    WHERE cat_id IN ({$placeholders})
-                    GROUP BY recipe_id
-                    HAVING COUNT(DISTINCT cat_id) = %d
-                ", array_merge($cat_ids, array(count($cat_ids))));
-                
-                $matching_recipe_ids = $wpdb->get_col($sql);
-                
-                if (!empty($matching_recipe_ids)) {
-                    $args['post__in'] = $matching_recipe_ids;
-                    $args['orderby'] = 'post__in';
-                } else {
-                    $args['post__in'] = array(0);
-                }
+                $args['post__in'] = array(0);
             }
         }
         
@@ -292,6 +352,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                 type="text" 
                 id="recipeSearch" 
                 placeholder="Type to search recipe titles..." 
+                value="<?php echo esc_attr($search_term); ?>"
                 oninput="searchRecipes()"
                 style="flex: 1; padding: 10px 15px; font-size: 15px; border: 2px solid #ddd; border-radius: 4px;"
             >
@@ -385,7 +446,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                     </td>
                     <td data-label="Title">
                         <?php 
-                        $view_url = home_url('/recipe-view-page/?ids=' . $post_id);
+                        $view_url = home_url('/recipe-view-page/?ids=' . $post_id . $state_query);
                         ?>
                         <a href="<?php echo esc_url($view_url); ?>" class="recipe-title-link">
                             <?php the_title(); ?>
@@ -453,6 +514,11 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                 <?php endif; ?>
             </span>
         </div>
+        
+        <!-- Hidden fields so bulk actions (view, print, delete, copy) preserve filter/search state on redirect -->
+        <input type="hidden" name="state_food_cat" value="<?php echo esc_attr(implode(',', $food_cat_ids)); ?>">
+        <input type="hidden" name="state_author_cat" value="<?php echo esc_attr(implode(',', $author_cat_ids)); ?>">
+        <input type="hidden" name="state_search" value="<?php echo esc_attr($search_term); ?>">
     </form>
 </div>
 
@@ -493,8 +559,6 @@ function openShareDialog() {
             $can_share_with = true;
             $role_display = ' [Subscriber]';
         } elseif ($is_author) {
-            // Show author if current user is in their viewers list,
-            // OR if they are in current user's viewers list (bidirectional)
             if (user_can_view_collection($current_user_id, $user->ID) ||
                 user_can_view_collection($user->ID, $current_user_id)) {
                 $can_share_with = true;
@@ -584,6 +648,56 @@ function executeShare() {
     form.submit();
 }
 
+function toggleDropdown(id) {
+    const dropdown = document.getElementById(id);
+    const isOpen = dropdown.style.display === 'block';
+    document.getElementById('foodCategoryDropdown').style.display = 'none';
+    document.getElementById('authorCategoryDropdown').style.display = 'none';
+    dropdown.style.display = isOpen ? 'none' : 'block';
+}
+
+document.addEventListener('click', function(e) {
+    const foodBtn = document.getElementById('foodCategoryFilterBtn');
+    const authorBtn = document.getElementById('authorCategoryFilterBtn');
+    const foodDropdown = document.getElementById('foodCategoryDropdown');
+    const authorDropdown = document.getElementById('authorCategoryDropdown');
+    
+    if (!foodBtn.contains(e.target) && !foodDropdown.contains(e.target)) {
+        foodDropdown.style.display = 'none';
+    }
+    if (!authorBtn.contains(e.target) && !authorDropdown.contains(e.target)) {
+        authorDropdown.style.display = 'none';
+    }
+});
+
+function getCurrentSelections() {
+    const foodIds = Array.from(document.querySelectorAll('input[name="food_cat_filters[]"]:checked')).map(cb => cb.value);
+    const authorIds = Array.from(document.querySelectorAll('input[name="author_cat_filters[]"]:checked')).map(cb => cb.value);
+    return { foodIds, authorIds };
+}
+
+function applyFiltersInstantly() {
+    const { foodIds, authorIds } = getCurrentSelections();
+    const params = new URLSearchParams();
+    if (foodIds.length > 0) params.set('food_cat', foodIds.join(','));
+    if (authorIds.length > 0) params.set('author_cat', authorIds.join(','));
+    
+    const currentSearch = document.getElementById('recipeSearch').value;
+    if (currentSearch) params.set('s', currentSearch);
+    
+    <?php if ($selected_collection != $current_user_id): ?>
+    params.set('collection', '<?php echo intval($selected_collection); ?>');
+    <?php endif; ?>
+    
+    window.location.href = '<?php echo home_url('/recipe-manager/'); ?>?' + params.toString();
+}
+
+function clearFilterGroup(group) {
+    const selector = group === 'food' ? 'input[name="food_cat_filters[]"]' : 'input[name="author_cat_filters[]"]';
+    document.querySelectorAll(selector).forEach(cb => cb.checked = false);
+    applyFiltersInstantly();
+}
+
 function searchRecipes() {
     const searchTerm = document.getElementById('recipeSearch').value.toLowerCase();
     const rows = document.querySelectorAll('.recipe-manager-table tbody tr');
@@ -607,6 +721,17 @@ function searchRecipes() {
     
     document.querySelector('.recipe-count strong').textContent = visibleCount;
     updateSelectedCount();
+    
+    // Update the recipe title links to carry the current search term too
+    document.querySelectorAll('.recipe-title-link').forEach(link => {
+        const url = new URL(link.href);
+        if (searchTerm) {
+            url.searchParams.set('s', searchTerm);
+        } else {
+            url.searchParams.delete('s');
+        }
+        link.href = url.toString();
+    });
 }
 
 function clearSearch() {
