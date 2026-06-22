@@ -237,18 +237,21 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                 </div>
             </div>
             
-            <?php if (current_user_can('edit_posts') && $can_manage): ?>
-            <?php 
-            $category_manager_url = home_url('/category-manager/');
-            if ($selected_collection != get_current_user_id()) {
-                $category_manager_url .= '?collection=' . $selected_collection;
-            }
-            ?>
-            <button onclick="window.location.href='<?php echo esc_url($category_manager_url); ?>'" class="action-btn" style="background: #2271b1; color: white; margin-left: auto;">
+         </div>
+        
+        <?php if (current_user_can('edit_posts') && $can_manage): ?>
+        <?php 
+        $category_manager_url = home_url('/category-manager/');
+        if ($selected_collection != get_current_user_id()) {
+            $category_manager_url .= '?collection=' . $selected_collection;
+        }
+        ?>
+        <div style="margin-bottom: 10px;">
+            <button onclick="window.location.href='<?php echo esc_url($category_manager_url); ?>'" class="action-btn" style="background: #2271b1; color: white;">
                 📁 Manage Categories
             </button>
-            <?php endif; ?>
         </div>
+        <?php endif; ?>  
         
         <!-- Active Filter Pills -->
         <?php if (!empty($food_cat_ids) || !empty($author_cat_ids)): ?>
