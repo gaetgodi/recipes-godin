@@ -4,8 +4,11 @@
  *
  * Screen-optimized view for selected recipes
  *
- * @version 2.1.3
+ * @version 2.2.0
  * @changelog
+ *   2.2.0 - Back link and Edit link now preserve food_cat/author_cat/search state
+ *            from the new two-group filter system, so navigating to edit a recipe
+ *            and back no longer resets the active filters.
  *   2.1.3 - Show featured image (Original Image) after notes section.
  *   2.1.2 - Show all categories comma-separated, not just first one.
  *   2.1.1 - Fixed admin losing edit access. Fixed Uncategorized bug (use get_recipe_categories).
@@ -32,10 +35,26 @@ get_header();
 
 require_once(get_stylesheet_directory() . '/collection-permissions.php');
 
-// Build back URL with category filter if present
+// Carry filter/search state from the incoming URL, for the Back link and Edit links
+$state_parts = array();
+if (!empty($_GET['food_cat'])) {
+    $state_parts[] = 'food_cat=' . rawurlencode($_GET['food_cat']);
+}
+if (!empty($_GET['author_cat'])) {
+    $state_parts[] = 'author_cat=' . rawurlencode($_GET['author_cat']);
+}
+if (!empty($_GET['s'])) {
+    $state_parts[] = 's=' . rawurlencode($_GET['s']);
+}
+if (!empty($_GET['collection'])) {
+    $state_parts[] = 'collection=' . intval($_GET['collection']);
+}
+$state_query = empty($state_parts) ? '' : '&' . implode('&', $state_parts);
+
+// Build back URL with filter/search state preserved
 $back_url = home_url('/recipe-manager/');
-if (!empty($_GET['recipe_cat'])) {
-    $back_url .= '?recipe_cat=' . intval($_GET['recipe_cat']);
+if (!empty($state_parts)) {
+    $back_url .= '?' . implode('&', $state_parts);
 }
 ?>
 
@@ -92,7 +111,7 @@ if (!empty($_GET['recipe_cat'])) {
                 <?php echo esc_html($category); ?>
             </span>
             <?php if ($can_edit): 
-                $edit_url = home_url('/recipe-editor/?id=' . $post_id);
+                $edit_url = home_url('/recipe-editor/?id=' . $post_id . $state_query);
             ?>
             <a href="<?php echo esc_url($edit_url); ?>" style="background: white; color: #c84a31; padding: 8px 16px; border-radius: 4px; text-decoration: none; font-weight: bold; font-size: 14px;">
                 ✏️ Edit
