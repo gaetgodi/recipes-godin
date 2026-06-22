@@ -56,8 +56,14 @@ function get_user_category_by_name($user_id, $cat_name) {
 
 /**
  * Create a new category for a user
+ *
+ * @param int    $user_id
+ * @param string $cat_name
+ * @param string $category_type  'food' (default) or 'author'. Author categories
+ *                                are auto-created during share/copy to record
+ *                                where a recipe originally came from.
  */
-function create_user_category($user_id, $cat_name) {
+function create_user_category($user_id, $cat_name, $category_type = 'food') {
     global $wpdb;
     
     // Check if already exists
@@ -70,9 +76,10 @@ function create_user_category($user_id, $cat_name) {
         $wpdb->prefix . 'recipe_categories',
         array(
             'cat_name' => $cat_name,
+            'category_type' => $category_type,
             'user_id' => $user_id,
         ),
-        array('%s', '%d')
+        array('%s', '%s', '%d')
     );
     
     if ($result === false) {
@@ -275,9 +282,25 @@ function get_recipes_by_category($cat_id, $limit = -1) {
 
 /**
  * Get all categories with recipe counts for a user
+ *
+ * @param int         $user_id
+ * @param string|null $category_type  Optional filter: 'food', 'author', or null for all (default).
  */
-function get_user_categories_with_counts($user_id) {
+function get_user_categories_with_counts($user_id, $category_type = null) {
     global $wpdb;
+    
+    if ($category_type !== null) {
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT c.*, COUNT(r.recipe_id) as recipe_count
+             FROM {$wpdb->prefix}recipe_categories c
+             LEFT JOIN {$wpdb->prefix}recipe_category_relationships r ON c.cat_id = r.cat_id
+             WHERE c.user_id = %d AND c.category_type = %s
+             GROUP BY c.cat_id
+             ORDER BY c.cat_name ASC",
+            $user_id,
+            $category_type
+        ));
+    }
     
     return $wpdb->get_results($wpdb->prepare(
         "SELECT c.*, COUNT(r.recipe_id) as recipe_count
@@ -288,4 +311,4 @@ function get_user_categories_with_counts($user_id) {
          ORDER BY c.cat_name ASC",
         $user_id
     ));
-}
+}git add -A; git commit -m "Add category_type support to custom category functions - food vs author, backward compatible defaults"; git push
