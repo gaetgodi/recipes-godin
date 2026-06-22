@@ -311,4 +311,4 @@ function get_user_categories_with_counts($user_id, $category_type = null) {
          ORDER BY c.cat_name ASC",
         $user_id
     ));
-}git add -A; git commit -m "Add category_type support to custom category functions - food vs author, backward compatible defaults"; git push
+}
