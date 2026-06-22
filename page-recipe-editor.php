@@ -4,8 +4,11 @@
  *
  * Frontend recipe add/edit interface with featured image OCR and text import
  *
- * @version 2.1.2
+ * @version 2.2.0
  * @changelog
+ *   2.2.0 - Cancel/Back link, Delete redirect, and save-success redirect now preserve
+ *            food_cat/author_cat/search state from the two-group filter system,
+ *            instead of the old single recipe_cat/from_cat parameter.
  *   2.1.2 - Edit mode translate button and language dropdown now use upload-btn
  *            (red) class for visibility, matching creation mode.
  *   2.1.1 - Both translate JS functions skip machine-generated notes.
@@ -72,16 +75,26 @@ if (!current_user_can('edit_posts')) {
 $recipe_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $is_editing = ($recipe_id > 0);
 
-// Build back URL with category filter if applicable
-$back_url = home_url('/recipe-manager/');
+// Carry filter/search state from the incoming URL, for Cancel/Back, Delete, and save redirects
+$state_parts = array();
+if (!empty($_GET['food_cat'])) {
+    $state_parts[] = 'food_cat=' . rawurlencode($_GET['food_cat']);
+}
+if (!empty($_GET['author_cat'])) {
+    $state_parts[] = 'author_cat=' . rawurlencode($_GET['author_cat']);
+}
+if (!empty($_GET['s'])) {
+    $state_parts[] = 's=' . rawurlencode($_GET['s']);
+}
+if (!empty($_GET['collection'])) {
+    $state_parts[] = 'collection=' . intval($_GET['collection']);
+}
+$state_query = empty($state_parts) ? '' : '&' . implode('&', $state_parts);
 
-if (!empty($_GET['from_cat'])) {
-    $back_url .= '?recipe_cat=' . intval($_GET['from_cat']);
-} elseif ($is_editing) {
-    $recipe_cats = get_recipe_categories($recipe_id);
-    if (!empty($recipe_cats) && count($recipe_cats) === 1) {
-        $back_url .= '?recipe_cat=' . $recipe_cats[0]->cat_id;
-    }
+// Build back URL with filter/search state preserved
+$back_url = home_url('/recipe-manager/');
+if (!empty($state_parts)) {
+    $back_url .= '?' . implode('&', $state_parts);
 }
 
 // Load recipe data if editing
@@ -253,17 +266,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
                 set_recipe_categories($saved_id, array());
             }
             
-            $redirect_url = home_url('/recipe-manager/?saved=1');
-            
-            if (!empty($_GET['collection'])) {
-                $redirect_url = add_query_arg('collection', intval($_GET['collection']), $redirect_url);
-            }
-            
-            if (!empty($_GET['from_cat'])) {
-                $redirect_url = add_query_arg('recipe_cat', intval($_GET['from_cat']), $redirect_url);
-            } elseif (!empty($categories) && count($categories) === 1) {
-                $redirect_url = add_query_arg('recipe_cat', $categories[0], $redirect_url);
-            }
+            $redirect_url = home_url('/recipe-manager/?saved=1' . $state_query);
             
             wp_redirect($redirect_url);
             exit;
