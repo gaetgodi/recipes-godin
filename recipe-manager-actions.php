@@ -271,7 +271,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                                 if ($existing_cat) {
                                     $new_category_ids[] = $existing_cat->cat_id;
                                 } else {
-                                    $result = create_user_category($recipient_id, $cat->cat_name);
+                                    $result = create_user_category($recipient_id, $author_category_name, 'author');
                                     if (isset($result['cat_id'])) {
                                         $new_category_ids[] = $result['cat_id'];
                                     }

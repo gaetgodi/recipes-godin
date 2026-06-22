@@ -406,7 +406,7 @@ function copy_recipe_to_my_collection($recipe_id, $target_user_id) {
             if ($existing_author_cat) {
                 $new_category_ids[] = $existing_author_cat->cat_id;
             } else {
-                $result = create_user_category($target_user_id, $author_category_name);
+                $result = create_user_category($target_user_id, $author_category_name, 'author');
                 if (isset($result['cat_id'])) {
                     $new_category_ids[] = $result['cat_id'];
                 }
