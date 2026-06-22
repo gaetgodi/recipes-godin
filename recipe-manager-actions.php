@@ -4,8 +4,13 @@
  *
  * Handles all GET and POST actions for recipe management
  *
- * @version 2.1.4
+ * @version 2.2.0
  * @changelog
+ *   2.2.0 - All redirects to recipe-manager now preserve food_cat/author_cat/search
+ *            state via hidden form fields, so filters survive delete/copy/share actions.
+ *            Fixed share action's first category loop: was passing an undefined variable
+ *            and hardcoded 'author' type instead of each category's own name and type,
+ *            which would have mislabeled shared recipes' food categories as author categories.
  *   2.1.4 - Share action now copies featured image to recipient's recipe.
  *   2.1.3 - Grant reciprocal viewer permission when sharing with an existing author,
  *            so sharer appears in recipient's collection dropdown going forward.
@@ -21,6 +26,26 @@
 // Security check - must be included from WordPress
 if (!defined('ABSPATH')) {
     exit;
+}
+
+/**
+ * Build a query-string fragment carrying the current filter/search state
+ * (read from the hidden form fields submitted with the bulk action), for
+ * appending to a redirect URL back to recipe-manager.
+ * Returns a string starting with '&', or '' if there's nothing to carry.
+ */
+function recipe_actions_state_query_args() {
+    $parts = array();
+    if (!empty($_POST['state_food_cat'])) {
+        $parts[] = 'food_cat=' . rawurlencode($_POST['state_food_cat']);
+    }
+    if (!empty($_POST['state_author_cat'])) {
+        $parts[] = 'author_cat=' . rawurlencode($_POST['state_author_cat']);
+    }
+    if (!empty($_POST['state_search'])) {
+        $parts[] = 's=' . rawurlencode($_POST['state_search']);
+    }
+    return empty($parts) ? '' : '&' . implode('&', $parts);
 }
 
 // Handle GET actions (like copy_recipe from links)
@@ -48,6 +73,7 @@ if (isset($_GET['action'])) {
 if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
     $selected_ids = array_map('intval', $_POST['selected_recipes']);
     $action = sanitize_text_field($_POST['bulk_action']);
+    $state_query = recipe_actions_state_query_args();
     
     switch ($action) {
         case 'delete':
@@ -68,13 +94,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                 
                 wp_cache_flush();
                 
-                $redirect_url = home_url('/recipe-manager/?deleted=1');
-                if (!empty($_GET['recipe_cat'])) {
-                    $redirect_url .= '&recipe_cat=' . intval($_GET['recipe_cat']);
-                }
-                if (!empty($_GET['collection'])) {
-                    $redirect_url .= '&collection=' . intval($_GET['collection']);
-                }
+                $redirect_url = home_url('/recipe-manager/?deleted=1' . $state_query);
                 wp_redirect($redirect_url);
                 exit;
             } else {
@@ -85,10 +105,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
         case 'view':
             set_transient('recipe_view_' . get_current_user_id(), $selected_ids, 300);
             
-            $redirect_url = home_url('/recipe-view-page/?ids=' . implode(',', $selected_ids));
-            if (!empty($_GET['recipe_cat'])) {
-                $redirect_url .= '&recipe_cat=' . intval($_GET['recipe_cat']);
-            }
+            $redirect_url = home_url('/recipe-view-page/?ids=' . implode(',', $selected_ids) . $state_query);
             
             wp_redirect($redirect_url);
             exit;
@@ -97,10 +114,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
         case 'print':
             set_transient('recipe_print_' . get_current_user_id(), $selected_ids, 300);
             
-            $redirect_url = home_url('/recipe-print-page/?ids=' . implode(',', $selected_ids));
-            if (!empty($_GET['recipe_cat'])) {
-                $redirect_url .= '&recipe_cat=' . intval($_GET['recipe_cat']);
-            }
+            $redirect_url = home_url('/recipe-print-page/?ids=' . implode(',', $selected_ids) . $state_query);
             
             wp_redirect($redirect_url);
             exit;
@@ -129,6 +143,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
             if ($skipped_count > 0) {
                 $redirect_url .= '&bulk_skipped=' . $skipped_count;
             }
+            $redirect_url .= $state_query;
             
             wp_redirect($redirect_url);
             exit;
@@ -160,10 +175,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                             set_recipe_categories($new_id, $cat_ids);
                         }
                         
-                        $redirect_url = home_url('/recipe-editor/?id=' . $new_id . '&copied=1');
-                        if (!empty($_GET['recipe_cat'])) {
-                            $redirect_url .= '&from_cat=' . intval($_GET['recipe_cat']);
-                        }
+                        $redirect_url = home_url('/recipe-editor/?id=' . $new_id . '&copied=1' . $state_query);
                         wp_redirect($redirect_url);
                         exit;
                     }
@@ -196,10 +208,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                                       user_can_view_collection($recipient_id, $current_user_id);
                     
                     if (!$has_permission && !$is_admin) {
-                        $redirect_url = home_url('/recipe-manager/?share_error=no_permission');
-                        if (!empty($_GET['collection'])) {
-                            $redirect_url .= '&collection=' . intval($_GET['collection']);
-                        }
+                        $redirect_url = home_url('/recipe-manager/?share_error=no_permission' . $state_query);
                         wp_redirect($redirect_url);
                         exit;
                     }
@@ -271,7 +280,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                                 if ($existing_cat) {
                                     $new_category_ids[] = $existing_cat->cat_id;
                                 } else {
-                                    $result = create_user_category($recipient_id, $author_category_name, 'author');
+                                    $result = create_user_category($recipient_id, $cat->cat_name, $cat->category_type);
                                     if (isset($result['cat_id'])) {
                                         $new_category_ids[] = $result['cat_id'];
                                     }
@@ -288,7 +297,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                                     if ($existing_author_cat) {
                                         $new_category_ids[] = $existing_author_cat->cat_id;
                                     } else {
-                                        $result = create_user_category($recipient_id, $author_category_name);
+                                        $result = create_user_category($recipient_id, $author_category_name, 'author');
                                         if (isset($result['cat_id'])) {
                                             $new_category_ids[] = $result['cat_id'];
                                         }
@@ -309,12 +318,7 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                 if ($recipient_was_promoted) {
                     $redirect_url .= '&promoted_recipient=1';
                 }
-                if (!empty($_GET['collection'])) {
-                    $redirect_url .= '&collection=' . intval($_GET['collection']);
-                }
-                if (!empty($_GET['recipe_cat'])) {
-                    $redirect_url .= '&recipe_cat=' . intval($_GET['recipe_cat']);
-                }
+                $redirect_url .= $state_query;
                 wp_redirect($redirect_url);
                 exit;
             }
