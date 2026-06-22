@@ -12,6 +12,13 @@
  *   1.0.0 - Initial release.
  */
 
+ .filter-group-pair {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: nowrap;
+}
+
 .recipe-manager {
     max-width: 1400px;
     margin: 40px auto;

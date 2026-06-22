@@ -4,8 +4,10 @@
  *
  * Complete recipe management interface with filtering, bulk actions, and printing
  *
- * @version 2.2.0
+ * @version 2.2.1
  * @changelog
+ *   2.2.1 - Wrapped each filter label+dropdown in a .filter-group-pair div so the
+ *            row wraps between complete groups, not in the middle of a label/dropdown pair.
  *   2.2.0 - Split category filtering into two independent groups: Food Categories
  *            and Author. OR within each group, AND between groups. Search term
  *            and both filter groups now persist across navigation to view/edit
@@ -173,61 +175,65 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
     <!-- Filter Section -->
     <div class="filter-section" style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
         <div class="filter-inner-row" style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px; flex-wrap: wrap;">
-            <label style="font-weight: 600;">Filter by Food Category:</label>
-            
-            <div style="position: relative;">
-                <button type="button" id="foodCategoryFilterBtn" onclick="toggleDropdown('foodCategoryDropdown')" class="action-btn" style="background: #6c757d; color: white; min-width: 200px; text-align: left; position: relative;">
-                    <span id="foodFilterBtnText"><?php echo !empty($food_cat_ids) ? count($food_cat_ids) . ' selected' : 'Select Categories'; ?></span>
-                    <span style="float: right;">▼</span>
-                </button>
+            <div class="filter-group-pair">
+                <label style="font-weight: 600;">Filter by Food Category:</label>
                 
-                <div id="foodCategoryDropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 250px; max-height: 400px; overflow-y: auto; z-index: 1000; margin-top: 5px;">
-                    <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-                        <strong>Select one or more:</strong>
-                        <button type="button" onclick="clearFilterGroup('food')" class="action-btn" style="background: #dc3545; color: white; padding: 4px 12px; font-size: 12px;">
-                            Clear
-                        </button>
+                <div style="position: relative;">
+                    <button type="button" id="foodCategoryFilterBtn" onclick="toggleDropdown('foodCategoryDropdown')" class="action-btn" style="background: #6c757d; color: white; min-width: 200px; text-align: left; position: relative;">
+                        <span id="foodFilterBtnText"><?php echo !empty($food_cat_ids) ? count($food_cat_ids) . ' selected' : 'Select Categories'; ?></span>
+                        <span style="float: right;">▼</span>
+                    </button>
+                    
+                    <div id="foodCategoryDropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 250px; max-height: 400px; overflow-y: auto; z-index: 1000; margin-top: 5px;">
+                        <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                            <strong>Select one or more:</strong>
+                            <button type="button" onclick="clearFilterGroup('food')" class="action-btn" style="background: #dc3545; color: white; padding: 4px 12px; font-size: 12px;">
+                                Clear
+                            </button>
+                        </div>
+                        <?php
+                        $food_categories = get_user_categories_with_counts($selected_collection, 'food');
+                        foreach ($food_categories as $cat) {
+                            if ($cat->recipe_count == 0) continue;
+                            $checked = in_array($cat->cat_id, $food_cat_ids) ? 'checked' : '';
+                            echo '<label style="display: block; padding: 8px 15px; cursor: pointer; border-bottom: 1px solid #f0f0f0;" onmouseover="this.style.background=\'#f8f9fa\'" onmouseout="this.style.background=\'white\'">';
+                            echo '<input type="checkbox" name="food_cat_filters[]" value="' . $cat->cat_id . '" ' . $checked . ' onchange="applyFiltersInstantly()" style="margin-right: 8px;">';
+                            echo esc_html($cat->cat_name) . ' <span style="color: #6c757d;">(' . $cat->recipe_count . ')</span>';
+                            echo '</label>';
+                        }
+                        ?>
                     </div>
-                    <?php
-                    $food_categories = get_user_categories_with_counts($selected_collection, 'food');
-                    foreach ($food_categories as $cat) {
-                        if ($cat->recipe_count == 0) continue;
-                        $checked = in_array($cat->cat_id, $food_cat_ids) ? 'checked' : '';
-                        echo '<label style="display: block; padding: 8px 15px; cursor: pointer; border-bottom: 1px solid #f0f0f0;" onmouseover="this.style.background=\'#f8f9fa\'" onmouseout="this.style.background=\'white\'">';
-                        echo '<input type="checkbox" name="food_cat_filters[]" value="' . $cat->cat_id . '" ' . $checked . ' onchange="applyFiltersInstantly()" style="margin-right: 8px;">';
-                        echo esc_html($cat->cat_name) . ' <span style="color: #6c757d;">(' . $cat->recipe_count . ')</span>';
-                        echo '</label>';
-                    }
-                    ?>
                 </div>
             </div>
             
-            <label style="font-weight: 600;">Filter by Author:</label>
-            
-            <div style="position: relative;">
-                <button type="button" id="authorCategoryFilterBtn" onclick="toggleDropdown('authorCategoryDropdown')" class="action-btn" style="background: #6c757d; color: white; min-width: 200px; text-align: left; position: relative;">
-                    <span id="authorFilterBtnText"><?php echo !empty($author_cat_ids) ? count($author_cat_ids) . ' selected' : 'Select Authors'; ?></span>
-                    <span style="float: right;">▼</span>
-                </button>
+            <div class="filter-group-pair">
+                <label style="font-weight: 600;">Filter by Author:</label>
                 
-                <div id="authorCategoryDropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 250px; max-height: 400px; overflow-y: auto; z-index: 1000; margin-top: 5px;">
-                    <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-                        <strong>Select one or more:</strong>
-                        <button type="button" onclick="clearFilterGroup('author')" class="action-btn" style="background: #dc3545; color: white; padding: 4px 12px; font-size: 12px;">
-                            Clear
-                        </button>
+                <div style="position: relative;">
+                    <button type="button" id="authorCategoryFilterBtn" onclick="toggleDropdown('authorCategoryDropdown')" class="action-btn" style="background: #6c757d; color: white; min-width: 200px; text-align: left; position: relative;">
+                        <span id="authorFilterBtnText"><?php echo !empty($author_cat_ids) ? count($author_cat_ids) . ' selected' : 'Select Authors'; ?></span>
+                        <span style="float: right;">▼</span>
+                    </button>
+                    
+                    <div id="authorCategoryDropdown" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 250px; max-height: 400px; overflow-y: auto; z-index: 1000; margin-top: 5px;">
+                        <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                            <strong>Select one or more:</strong>
+                            <button type="button" onclick="clearFilterGroup('author')" class="action-btn" style="background: #dc3545; color: white; padding: 4px 12px; font-size: 12px;">
+                                Clear
+                            </button>
+                        </div>
+                        <?php
+                        $author_categories = get_user_categories_with_counts($selected_collection, 'author');
+                        foreach ($author_categories as $cat) {
+                            if ($cat->recipe_count == 0) continue;
+                            $checked = in_array($cat->cat_id, $author_cat_ids) ? 'checked' : '';
+                            echo '<label style="display: block; padding: 8px 15px; cursor: pointer; border-bottom: 1px solid #f0f0f0;" onmouseover="this.style.background=\'#f8f9fa\'" onmouseout="this.style.background=\'white\'">';
+                            echo '<input type="checkbox" name="author_cat_filters[]" value="' . $cat->cat_id . '" ' . $checked . ' onchange="applyFiltersInstantly()" style="margin-right: 8px;">';
+                            echo esc_html($cat->cat_name) . ' <span style="color: #6c757d;">(' . $cat->recipe_count . ')</span>';
+                            echo '</label>';
+                        }
+                        ?>
                     </div>
-                    <?php
-                    $author_categories = get_user_categories_with_counts($selected_collection, 'author');
-                    foreach ($author_categories as $cat) {
-                        if ($cat->recipe_count == 0) continue;
-                        $checked = in_array($cat->cat_id, $author_cat_ids) ? 'checked' : '';
-                        echo '<label style="display: block; padding: 8px 15px; cursor: pointer; border-bottom: 1px solid #f0f0f0;" onmouseover="this.style.background=\'#f8f9fa\'" onmouseout="this.style.background=\'white\'">';
-                        echo '<input type="checkbox" name="author_cat_filters[]" value="' . $cat->cat_id . '" ' . $checked . ' onchange="applyFiltersInstantly()" style="margin-right: 8px;">';
-                        echo esc_html($cat->cat_name) . ' <span style="color: #6c757d;">(' . $cat->recipe_count . ')</span>';
-                        echo '</label>';
-                    }
-                    ?>
                 </div>
             </div>
             
