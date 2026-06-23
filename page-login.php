@@ -84,7 +84,7 @@ get_header();
                 </div>
             <?php endif; ?>
             
-            <form method="post" action="">
+            <form method="post" action="<?php echo esc_url(home_url('/login/')); ?>" id="loginform">
                 <?php wp_nonce_field('custom_login_form'); ?>
                 
                 <div class="form-group">
@@ -139,7 +139,5 @@ function togglePasswordVisibility() {
     }
 }
 </script>
-
-<?php get_footer(); ?>
 
 <?php get_footer(); ?>
