@@ -4,8 +4,12 @@
  *
  * Complete recipe management interface with filtering, bulk actions, and printing
  *
- * @version 2.2.1
+ * @version 2.3.0
  * @changelog
+ *   2.3.0 - UI reorganization: moved Manage Categories / Manage Permissions into
+ *            toolbar box with collection selector; filter section is now filters-only
+ *            with centered title; Add New Recipe is a prominent standalone CTA above
+ *            the recipe list. Full responsive support.
  *   2.2.1 - Wrapped each filter label+dropdown in a .filter-group-pair div so the
  *            row wraps between complete groups, not in the middle of a label/dropdown pair.
  *   2.2.0 - Split category filtering into two independent groups: Food Categories
@@ -30,6 +34,139 @@ $current_user = wp_get_current_user();
 // Include action handlers
 require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
 ?>
+
+<style>
+/* ── v2.3.0 layout styles ── */
+.rm-toolbar {
+    background: #f0f8ff;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+    border-radius: 6px;
+    border: 2px solid #2271b1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.rm-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.rm-toolbar-right {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.rm-filter-box {
+    background: #f8f9fa;
+    padding: 18px 20px;
+    border-radius: 6px;
+    border: 2px solid #dee2e6;
+    margin-bottom: 20px;
+}
+.rm-filter-title {
+    text-align: center;
+    margin: 0 0 14px 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #495057;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.rm-filter-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.rm-filter-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    justify-content: center;
+    align-items: center;
+}
+.rm-filter-pills .pill-label {
+    font-size: 14px;
+    color: #666;
+    padding: 4px 0;
+}
+.rm-filter-pills .pill {
+    display: inline-flex;
+    align-items: center;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 13px;
+    gap: 6px;
+}
+.rm-filter-pills .pill-food { background: #007bff; }
+.rm-filter-pills .pill-author { background: #28a745; }
+.rm-filter-pills .pill a {
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.rm-add-recipe-cta {
+    text-align: center;
+    margin-bottom: 20px;
+}
+.rm-add-recipe-cta a {
+    display: inline-block;
+    background: #00a32a;
+    color: white;
+    padding: 14px 44px;
+    font-size: 18px;
+    font-weight: 700;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: background 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 8px rgba(0,163,42,0.25);
+}
+.rm-add-recipe-cta a:hover {
+    background: #008a23;
+    box-shadow: 0 4px 14px rgba(0,163,42,0.35);
+    color: white;
+}
+
+@media (max-width: 600px) {
+    .rm-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .rm-toolbar-left,
+    .rm-toolbar-right {
+        justify-content: center;
+    }
+    .rm-toolbar-right {
+        border-top: 1px solid #b8daff;
+        padding-top: 10px;
+    }
+    .rm-filter-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .filter-group-pair {
+        width: 100%;
+    }
+    .filter-group-pair button {
+        width: 100% !important;
+    }
+    .rm-add-recipe-cta a {
+        display: block;
+        padding: 16px 20px;
+        font-size: 17px;
+    }
+}
+</style>
 
 <div class="recipe-manager">
 <div class="page-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -103,6 +240,10 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
     $state_query = recipe_manager_state_query_args($food_cat_ids, $author_cat_ids, $search_term, $selected_collection, $current_user_id);
     // Version without leading '&', for building a fresh '?...' URL from scratch
     $state_query_no_amp = ltrim($state_query, '&');
+    
+    // Pre-fetch categories here so both filter dropdowns and pills can use them
+    $food_categories = get_user_categories_with_counts($selected_collection, 'food');
+    $author_categories = get_user_categories_with_counts($selected_collection, 'author');
     ?>
     
     <!-- Copy Error Message -->
@@ -112,38 +253,70 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
     </div>
     <?php endif; ?>
     
-    <!-- Collection Selector -->
-    <?php if (count($accessible_collections) > 1): ?>
-    <div style="background: #f0f8ff; padding: 15px; margin-bottom: 20px; border-radius: 6px; border: 2px solid #2271b1;">
-        <label for="collection-selector" style="font-weight: 600; margin-right: 10px;">
-            📚 Viewing Collection:
-        </label>
-        <select id="collection-selector" onchange="switchCollection()" style="padding: 8px 15px; font-size: 15px; border: 2px solid #2271b1; border-radius: 4px; min-width: 250px;">
-            <?php foreach ($accessible_collections as $collection): ?>
-                <option value="<?php echo $collection['owner_id']; ?>" 
-                        <?php selected($selected_collection, $collection['owner_id']); ?>>
-                    <?php 
-                    echo esc_html($collection['owner_name']) . "'s Recipes";
-                    if ($collection['owner_id'] == $current_user_id) {
-                        echo " (Yours)";
-                    } else {
-                        $owner_user = get_userdata($collection['owner_id']);
-                        if ($owner_user && !empty($owner_user->roles)) {
-                            $role = ucfirst($owner_user->roles[0]);
-                            echo " [{$role}]";
+    <!-- ═══════════════════════════════════════════════════════════
+         TOOLBAR: Collection selector (if multiple) + admin buttons
+         ═══════════════════════════════════════════════════════════ -->
+    <?php
+    $has_multiple_collections = (count($accessible_collections) > 1);
+    $has_admin_buttons = (current_user_can('edit_posts') && $can_manage) || $is_owner;
+    ?>
+    <?php if ($has_multiple_collections || $has_admin_buttons): ?>
+    <div class="rm-toolbar">
+        <div class="rm-toolbar-left">
+            <?php if ($has_multiple_collections): ?>
+            <label for="collection-selector" style="font-weight: 600;">
+                📚 Viewing Collection:
+            </label>
+            <select id="collection-selector" onchange="switchCollection()" style="padding: 8px 15px; font-size: 15px; border: 2px solid #2271b1; border-radius: 4px; min-width: 250px;">
+                <?php foreach ($accessible_collections as $collection): ?>
+                    <option value="<?php echo $collection['owner_id']; ?>" 
+                            <?php selected($selected_collection, $collection['owner_id']); ?>>
+                        <?php 
+                        echo esc_html($collection['owner_name']) . "'s Recipes";
+                        if ($collection['owner_id'] == $current_user_id) {
+                            echo " (Yours)";
+                        } else {
+                            $owner_user = get_userdata($collection['owner_id']);
+                            if ($owner_user && !empty($owner_user->roles)) {
+                                $role = ucfirst($owner_user->roles[0]);
+                                echo " [{$role}]";
+                            }
                         }
-                    }
-                    ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
+                        ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            
+            <script>
+            function switchCollection() {
+                var collectionId = document.getElementById('collection-selector').value;
+                window.location.href = '<?php echo home_url('/recipe-manager/'); ?>?collection=' + collectionId;
+            }
+            </script>
+            <?php else: ?>
+            <span style="font-weight: 600; font-size: 15px;">📚 Your Recipes</span>
+            <?php endif; ?>
+        </div>
         
-        <script>
-        function switchCollection() {
-            var collectionId = document.getElementById('collection-selector').value;
-            window.location.href = '<?php echo home_url('/recipe-manager/'); ?>?collection=' + collectionId;
-        }
-        </script>
+        <div class="rm-toolbar-right">
+            <?php if (current_user_can('edit_posts') && $can_manage): ?>
+            <?php 
+            $category_manager_url = home_url('/category-manager/');
+            if ($selected_collection != get_current_user_id()) {
+                $category_manager_url .= '?collection=' . $selected_collection;
+            }
+            ?>
+            <button onclick="window.location.href='<?php echo esc_url($category_manager_url); ?>'" class="action-btn" style="background: #2271b1; color: white;">
+                📁 Manage Categories
+            </button>
+            <?php endif; ?>
+            
+            <?php if ($is_owner): ?>
+            <button onclick="window.location.href='<?php echo home_url('/permissions-manager/'); ?>'" class="action-btn" style="background: #7c3aed; color: white;">
+                🔐 Manage Permissions
+            </button>
+            <?php endif; ?>
+        </div>
     </div>
     <?php endif; ?>
     
@@ -172,11 +345,15 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
     }
     ?>
     
-    <!-- Filter Section -->
-    <div class="filter-section" style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-        <div class="filter-inner-row" style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px; flex-wrap: wrap;">
+    <!-- ═══════════════════════════════════════════════════════════
+         FILTER BOX: filters only, centered title
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="rm-filter-box">
+        <div class="rm-filter-title">Filter Recipes</div>
+        
+        <div class="rm-filter-row">
             <div class="filter-group-pair">
-                <label style="font-weight: 600;">Filter by Food Category:</label>
+                <label style="font-weight: 600;">Food Category:</label>
                 
                 <div style="position: relative;">
                     <button type="button" id="foodCategoryFilterBtn" onclick="toggleDropdown('foodCategoryDropdown')" class="action-btn" style="background: #6c757d; color: white; min-width: 200px; text-align: left; position: relative;">
@@ -192,7 +369,6 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                             </button>
                         </div>
                         <?php
-                        $food_categories = get_user_categories_with_counts($selected_collection, 'food');
                         foreach ($food_categories as $cat) {
                             if ($cat->recipe_count == 0) continue;
                             $checked = in_array($cat->cat_id, $food_cat_ids) ? 'checked' : '';
@@ -207,7 +383,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
             </div>
             
             <div class="filter-group-pair">
-                <label style="font-weight: 600;">Filter by Author:</label>
+                <label style="font-weight: 600;">Author:</label>
                 
                 <div style="position: relative;">
                     <button type="button" id="authorCategoryFilterBtn" onclick="toggleDropdown('authorCategoryDropdown')" class="action-btn" style="background: #6c757d; color: white; min-width: 200px; text-align: left; position: relative;">
@@ -223,7 +399,6 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                             </button>
                         </div>
                         <?php
-                        $author_categories = get_user_categories_with_counts($selected_collection, 'author');
                         foreach ($author_categories as $cat) {
                             if ($cat->recipe_count == 0) continue;
                             $checked = in_array($cat->cat_id, $author_cat_ids) ? 'checked' : '';
@@ -236,35 +411,20 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                     </div>
                 </div>
             </div>
-            
-         </div>
-        
-        <?php if (current_user_can('edit_posts') && $can_manage): ?>
-        <?php 
-        $category_manager_url = home_url('/category-manager/');
-        if ($selected_collection != get_current_user_id()) {
-            $category_manager_url .= '?collection=' . $selected_collection;
-        }
-        ?>
-        <div style="margin-bottom: 10px;">
-            <button onclick="window.location.href='<?php echo esc_url($category_manager_url); ?>'" class="action-btn" style="background: #2271b1; color: white;">
-                📁 Manage Categories
-            </button>
         </div>
-        <?php endif; ?>  
         
         <!-- Active Filter Pills -->
         <?php if (!empty($food_cat_ids) || !empty($author_cat_ids)): ?>
-        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
-            <span style="font-size: 14px; color: #666; padding: 4px 0;">Active filters:</span>
+        <div class="rm-filter-pills">
+            <span class="pill-label">Active filters:</span>
             <?php 
             foreach ($food_categories as $cat) {
                 if (in_array($cat->cat_id, $food_cat_ids)) {
                     $remaining = array_diff($food_cat_ids, array($cat->cat_id));
                     $remove_url = home_url('/recipe-manager/?' . ltrim(recipe_manager_state_query_args($remaining, $author_cat_ids, $search_term, $selected_collection, $current_user_id), '&'));
-                    echo '<span style="display: inline-flex; align-items: center; background: #007bff; color: white; padding: 4px 10px; border-radius: 12px; font-size: 13px; gap: 6px;">';
+                    echo '<span class="pill pill-food">';
                     echo esc_html($cat->cat_name);
-                    echo '<a href="' . esc_url($remove_url) . '" style="color: white; text-decoration: none; font-weight: bold; font-size: 16px;" title="Remove filter">×</a>';
+                    echo '<a href="' . esc_url($remove_url) . '" title="Remove filter">&times;</a>';
                     echo '</span>';
                 }
             }
@@ -272,28 +432,25 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                 if (in_array($cat->cat_id, $author_cat_ids)) {
                     $remaining = array_diff($author_cat_ids, array($cat->cat_id));
                     $remove_url = home_url('/recipe-manager/?' . ltrim(recipe_manager_state_query_args($food_cat_ids, $remaining, $search_term, $selected_collection, $current_user_id), '&'));
-                    echo '<span style="display: inline-flex; align-items: center; background: #28a745; color: white; padding: 4px 10px; border-radius: 12px; font-size: 13px; gap: 6px;">';
+                    echo '<span class="pill pill-author">';
                     echo esc_html($cat->cat_name);
-                    echo '<a href="' . esc_url($remove_url) . '" style="color: white; text-decoration: none; font-weight: bold; font-size: 16px;" title="Remove filter">×</a>';
+                    echo '<a href="' . esc_url($remove_url) . '" title="Remove filter">&times;</a>';
                     echo '</span>';
                 }
             }
             ?>
         </div>
         <?php endif; ?>
-        
-        <?php if ($is_owner): ?>
-        <button onclick="window.location.href='<?php echo home_url('/permissions-manager/'); ?>'" class="action-btn" style="background: #7c3aed; color: white;">
-            🔐 Manage Permissions
-        </button>
-        <?php endif; ?>
-        
-        <?php if (current_user_can('edit_posts') && $can_manage): ?>
-        <button onclick="window.location.href='<?php echo home_url('/recipe-editor/'); ?>'" class="action-btn" style="background: #00a32a; color: white;">
-            + Add New Recipe
-        </button>
-        <?php endif; ?>
     </div>
+    
+    <!-- ═══════════════════════════════════════════════════════════
+         ADD NEW RECIPE CTA: prominent, right above the recipe list
+         ═══════════════════════════════════════════════════════════ -->
+    <?php if (current_user_can('edit_posts') && $can_manage): ?>
+    <div class="rm-add-recipe-cta">
+        <a href="<?php echo home_url('/recipe-editor/'); ?>">+ Add New Recipe</a>
+    </div>
+    <?php endif; ?>
     
     <form method="post" id="recipeManagerForm">
         <?php
