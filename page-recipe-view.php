@@ -46,7 +46,7 @@ if (!empty($_GET['author_cat'])) {
 if (!empty($_GET['rs'])) {
     $state_parts[] = 'rs=' . rawurlencode($_GET['rs']);
 }
-}
+
 if (!empty($_GET['collection'])) {
     $state_parts[] = 'collection=' . intval($_GET['collection']);
 }
