@@ -213,8 +213,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
     // --- Persisted filter/search state, used to build every outbound link below ---
     $food_cat_ids = !empty($_GET['food_cat']) ? array_map('intval', explode(',', $_GET['food_cat'])) : array();
     $author_cat_ids = !empty($_GET['author_cat']) ? array_map('intval', explode(',', $_GET['author_cat'])) : array();
-    $search_term = isset($_GET['s']) ? sanitize_text_field($_GET['s']) : '';
-    
+    $search_term = isset($_GET['rs']) ? sanitize_text_field($_GET['rs']) : '';   
     /**
      * Build a query-string fragment carrying the current filter/search state,
      * for appending to any link that should preserve it (view, edit, etc.)
@@ -229,7 +228,7 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
             $parts[] = 'author_cat=' . implode(',', $author_cat_ids);
         }
         if (!empty($search_term)) {
-            $parts[] = 's=' . rawurlencode($search_term);
+            $parts[] = 'rs=' . rawurlencode($search_term);
         }
         if ($collection_id != $current_user_id) {
             $parts[] = 'collection=' . intval($collection_id);
@@ -849,7 +848,7 @@ function applyFiltersInstantly() {
     if (authorIds.length > 0) params.set('author_cat', authorIds.join(','));
     
     const currentSearch = document.getElementById('recipeSearch').value;
-    if (currentSearch) params.set('s', currentSearch);
+    if (currentSearch) params.set('rs', currentSearch);
     
     <?php if ($selected_collection != $current_user_id): ?>
     params.set('collection', '<?php echo intval($selected_collection); ?>');
@@ -892,9 +891,9 @@ function searchRecipes() {
     document.querySelectorAll('.recipe-title-link').forEach(link => {
         const url = new URL(link.href);
         if (searchTerm) {
-            url.searchParams.set('s', searchTerm);
+            url.searchParams.set('rs', searchTerm);
         } else {
-            url.searchParams.delete('s');
+            url.searchParams.delete('rs');
         }
         link.href = url.toString();
     });

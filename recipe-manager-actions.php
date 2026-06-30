@@ -43,7 +43,7 @@ function recipe_actions_state_query_args() {
         $parts[] = 'author_cat=' . rawurlencode($_POST['state_author_cat']);
     }
     if (!empty($_POST['state_search'])) {
-        $parts[] = 's=' . rawurlencode($_POST['state_search']);
+        $parts[] = 'rs=' . rawurlencode($_POST['state_search']);
     }
     return empty($parts) ? '' : '&' . implode('&', $parts);
 }

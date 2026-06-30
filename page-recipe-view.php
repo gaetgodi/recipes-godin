@@ -43,8 +43,9 @@ if (!empty($_GET['food_cat'])) {
 if (!empty($_GET['author_cat'])) {
     $state_parts[] = 'author_cat=' . rawurlencode($_GET['author_cat']);
 }
-if (!empty($_GET['s'])) {
-    $state_parts[] = 's=' . rawurlencode($_GET['s']);
+if (!empty($_GET['rs'])) {
+    $state_parts[] = 'rs=' . rawurlencode($_GET['rs']);
+}
 }
 if (!empty($_GET['collection'])) {
     $state_parts[] = 'collection=' . intval($_GET['collection']);
