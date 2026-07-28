@@ -1,0 +1,393 @@
+<?php
+/**
+ * Template Name: Allergen Checker
+ *
+ * Batch-check recipes against the user's active allergen profile.
+ *
+ * Phase 2: recipes only. Products are added to the batch picker in Phase 3.
+ */
+
+get_header();
+
+if (!is_user_logged_in()) {
+    wp_redirect(home_url('/login/'));
+    exit;
+}
+
+require_once(get_stylesheet_directory() . '/collection-permissions.php');
+require_once(get_stylesheet_directory() . '/allergen-functions.php');
+require_once(get_stylesheet_directory() . '/allergen-permissions.php');
+require_once(get_stylesheet_directory() . '/allergen-matching-engine.php');
+
+$current_user_id = get_current_user_id();
+$active_profile = get_active_allergen_profile($current_user_id);
+
+$results = array();
+$ran_check = false;
+
+if ($active_profile && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['run_allergen_check'])) {
+    check_admin_referer('run_allergen_check');
+
+    $selected_recipe_ids = isset($_POST['selected_recipe_ids']) ? array_map('intval', (array) $_POST['selected_recipe_ids']) : array();
+
+    foreach ($selected_recipe_ids as $recipe_id) {
+        $recipe_post = get_post($recipe_id);
+        if (!$recipe_post || $recipe_post->post_type !== 'recipe') {
+            continue;
+        }
+
+        $report = run_allergen_check('recipe', $recipe_id, $active_profile->profile_id);
+        $report['item_title'] = get_the_title($recipe_id);
+        $results[] = $report;
+    }
+
+    $ran_check = true;
+}
+
+$flagged_count = 0;
+foreach ($results as $result) {
+    if ($result['flagged']) {
+        $flagged_count++;
+    }
+}
+
+// Build the recipe picker: user's own recipes + recipes from any collection
+// they have access to (same source as page-recipe-manager.php's toolbar).
+$accessible_collections = $active_profile ? get_accessible_collections($current_user_id) : array();
+
+$pickable_recipes = array();
+foreach ($accessible_collections as $collection) {
+    $recipes_query = new WP_Query(array(
+        'post_type' => 'recipe',
+        'posts_per_page' => -1,
+        'author' => $collection['owner_id'],
+        'orderby' => 'title',
+        'order' => 'ASC',
+    ));
+
+    while ($recipes_query->have_posts()) {
+        $recipes_query->the_post();
+        $pickable_recipes[] = array(
+            'id' => get_the_ID(),
+            'title' => get_the_title(),
+            'owner_name' => $collection['owner_name'],
+            'is_own' => ($collection['owner_id'] == $current_user_id),
+        );
+    }
+    wp_reset_postdata();
+}
+
+?>
+
+<style>
+.allergen-checker {
+    max-width: 1100px;
+    margin: 40px auto;
+    padding: 0 20px;
+}
+
+.allergen-checker h1 {
+    color: #c84a31;
+    font-size: 36px;
+    margin-bottom: 10px;
+}
+
+.allergen-checker-subtitle {
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.allergen-disclaimer {
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+    color: #664d03;
+    padding: 15px 20px;
+    border-radius: 6px;
+    margin-bottom: 25px;
+    font-size: 14px;
+}
+
+.active-profile-banner {
+    background: #ede9fe;
+    border: 2px solid #7c3aed;
+    color: #4c1d95;
+    padding: 12px 20px;
+    border-radius: 6px;
+    margin-bottom: 25px;
+    font-size: 14px;
+}
+
+.no-active-profile {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    padding: 20px;
+    border-radius: 6px;
+    margin-bottom: 25px;
+}
+
+.recipe-picker-box {
+    background: #f9f9f9;
+    border: 2px solid #dee2e6;
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 25px;
+}
+
+.recipe-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: 15px;
+}
+
+.recipe-picker-list label {
+    font-size: 14px;
+}
+
+.run-check-btn {
+    padding: 12px 30px;
+    background: #00a32a;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.run-check-btn:hover {
+    background: #008a20;
+}
+
+.batch-summary {
+    background: #e2e3e5;
+    border: 2px solid #adb5bd;
+    color: #383d41;
+    padding: 15px 20px;
+    border-radius: 6px;
+    margin-bottom: 25px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.item-report {
+    background: white;
+    border: 2px solid #dee2e6;
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.item-report.flagged {
+    border-color: #dc3545;
+}
+
+.item-report h3 {
+    margin: 0 0 5px 0;
+    font-size: 20px;
+}
+
+.item-report-profile-header {
+    font-size: 13px;
+    color: #495057;
+    background: #f8f9fa;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.item-report-disclaimer {
+    font-size: 12px;
+    color: #664d03;
+    margin-bottom: 15px;
+}
+
+.allergen-result {
+    padding: 10px 12px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+.allergen-result.tier-contains {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+}
+
+.allergen-result.tier-may_contain {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+}
+
+.allergen-result-name {
+    font-weight: bold;
+}
+
+.allergen-result-tier-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-left: 8px;
+}
+
+.allergen-match-line {
+    font-family: monospace;
+    font-size: 13px;
+    background: rgba(255,255,255,0.6);
+    padding: 4px 8px;
+    border-radius: 3px;
+    margin-top: 4px;
+}
+
+.allergen-match-source {
+    font-size: 11px;
+    color: #666;
+    text-transform: uppercase;
+    margin-right: 6px;
+}
+
+.not-detected-section {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px dashed #ccc;
+    font-size: 13px;
+    color: #666;
+}
+
+.general-caution {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 20px;
+    color: #0073aa;
+    text-decoration: none;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+</style>
+
+<div class="allergen-checker">
+    <a href="<?php echo home_url('/recipe-manager/'); ?>" class="back-link">← Back to Recipe Manager</a>
+
+    <h1>Allergen Checker</h1>
+    <p class="allergen-checker-subtitle">Check recipes against your active allergen profile.</p>
+
+    <div class="allergen-disclaimer">
+        This tool assists in reading ingredient labels and recipes. It does not replace reading the label yourself. Always verify against the physical product before consuming.
+    </div>
+
+    <?php if (!$active_profile): ?>
+    <div class="no-active-profile">
+        <strong>No active allergen profile selected.</strong>
+        <p>You need an active profile before you can run a check. <a href="<?php echo home_url('/allergen-profiles/'); ?>">Go to Allergen Profiles</a> to create one and set it active.</p>
+    </div>
+    <?php else: ?>
+
+    <div class="active-profile-banner">
+        Checking against: <strong><?php echo esc_html($active_profile->profile_name); ?></strong><?php if ($active_profile->profile_age !== null): ?>, age <?php echo esc_html($active_profile->profile_age); ?><?php endif; ?>
+        (profile last updated <?php echo esc_html(mysql2date('F j, Y', $active_profile->updated_date)); ?>)
+        — <a href="<?php echo home_url('/allergen-profiles/'); ?>">change profile</a>
+    </div>
+
+    <?php if ($ran_check): ?>
+        <div class="batch-summary">
+            <?php echo esc_html($flagged_count); ?> of <?php echo count($results); ?> item<?php echo count($results) === 1 ? '' : 's'; ?> flagged
+        </div>
+
+        <?php foreach ($results as $result): ?>
+        <div class="item-report <?php echo $result['flagged'] ? 'flagged' : ''; ?>">
+            <h3><?php echo esc_html($result['item_title']); ?></h3>
+
+            <div class="item-report-profile-header">
+                Active profile: <strong><?php echo esc_html($active_profile->profile_name); ?></strong><?php if ($active_profile->profile_age !== null): ?>, age <?php echo esc_html($active_profile->profile_age); ?><?php endif; ?>
+                &middot; profile last updated <?php echo esc_html(mysql2date('F j, Y', $active_profile->updated_date)); ?>
+            </div>
+            <div class="item-report-disclaimer">
+                This tool assists in reading ingredient labels and recipes. It does not replace reading the label yourself. Always verify against the physical product before consuming.
+            </div>
+
+            <?php
+            $flagged_allergens = array();
+            $not_detected_allergens = array();
+            foreach ($result['allergens'] as $allergen) {
+                if ($allergen['tier'] === 'not_detected') {
+                    $not_detected_allergens[] = $allergen;
+                } else {
+                    $flagged_allergens[] = $allergen;
+                }
+            }
+            ?>
+
+            <?php if (!empty($flagged_allergens)): ?>
+                <?php foreach ($flagged_allergens as $allergen): ?>
+                <div class="allergen-result tier-<?php echo esc_attr($allergen['tier']); ?>">
+                    <span class="allergen-result-name"><?php echo esc_html($allergen['allergen_name']); ?></span>
+                    <span class="allergen-result-tier-label">
+                        <?php echo $allergen['tier'] === 'contains' ? 'Contains' : 'May contain / shared facility'; ?>
+                    </span>
+                    <?php foreach ($allergen['matches'] as $match): ?>
+                    <div class="allergen-match-line">
+                        <span class="allergen-match-source"><?php echo esc_html($match['source']); ?></span><?php echo esc_html($match['line']); ?>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p style="color: #155724;">No allergens from this profile were flagged as Contains or May Contain.</p>
+            <?php endif; ?>
+
+            <?php if (!empty($result['general_cautions'])): ?>
+                <?php foreach ($result['general_cautions'] as $caution): ?>
+                <div class="general-caution">
+                    <strong>General caution</strong> (no specific allergen from this profile named) —
+                    <span class="allergen-match-source"><?php echo esc_html($caution['source']); ?></span><?php echo esc_html($caution['line']); ?>
+                </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+
+            <?php if (!empty($not_detected_allergens)): ?>
+            <div class="not-detected-section">
+                <strong>Not detected</strong> (no match found by this tool — not the same as confirmed safe):
+                <?php echo esc_html(implode(', ', wp_list_pluck($not_detected_allergens, 'allergen_name'))); ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php endforeach; ?>
+    <?php endif; ?>
+
+    <div class="recipe-picker-box">
+        <h2 style="margin-top: 0;">Select Recipes to Check</h2>
+        <form method="post">
+            <?php wp_nonce_field('run_allergen_check'); ?>
+            <div class="recipe-picker-list">
+                <?php if (!empty($pickable_recipes)): ?>
+                    <?php foreach ($pickable_recipes as $recipe): ?>
+                    <label>
+                        <input type="checkbox" name="selected_recipe_ids[]" value="<?php echo $recipe['id']; ?>">
+                        <?php echo esc_html($recipe['title']); ?>
+                        <?php if (!$recipe['is_own']): ?><span style="color:#666;">(<?php echo esc_html($recipe['owner_name']); ?>'s)</span><?php endif; ?>
+                    </label>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <p>No recipes available to check.</p>
+                <?php endif; ?>
+            </div>
+            <button type="submit" name="run_allergen_check" class="run-check-btn">Run Check</button>
+        </form>
+    </div>
+
+    <?php endif; ?>
+</div>
+
+<?php get_footer(); ?>
