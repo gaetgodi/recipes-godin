@@ -63,16 +63,36 @@ foreach ($results as $result) {
     }
 }
 
-// Build the recipe picker: user's own recipes + recipes from any collection
-// they have access to (same source as page-recipe-manager.php's toolbar).
+// Build the recipe picker: exactly one collection at a time, same
+// resolution logic as page-recipe-manager.php — NOT a flattened merge of
+// every accessible collection, which for an admin (who can access every
+// author's collection) would silently become "every recipe in the DB."
 $accessible_collections = $active_profile ? get_accessible_collections($current_user_id) : array();
 
-$pickable_recipes = array();
+$selected_collection = isset($_GET['collection']) ? intval($_GET['collection']) : $current_user_id;
+$current_collection = null;
+$can_access_selected = false;
+
 foreach ($accessible_collections as $collection) {
+    if ($collection['owner_id'] == $selected_collection) {
+        $can_access_selected = true;
+        $current_collection = $collection;
+        break;
+    }
+}
+
+if (!$can_access_selected && !empty($accessible_collections)) {
+    $current_collection = $accessible_collections[0];
+    $selected_collection = $current_collection['owner_id'];
+}
+
+$pickable_recipes = array();
+
+if ($current_collection) {
     $recipes_query = new WP_Query(array(
         'post_type' => 'recipe',
         'posts_per_page' => -1,
-        'author' => $collection['owner_id'],
+        'author' => $selected_collection,
         'orderby' => 'title',
         'order' => 'ASC',
     ));
@@ -82,8 +102,8 @@ foreach ($accessible_collections as $collection) {
         $pickable_recipes[] = array(
             'id' => get_the_ID(),
             'title' => get_the_title(),
-            'owner_name' => $collection['owner_name'],
-            'is_own' => ($collection['owner_id'] == $current_user_id),
+            'owner_name' => $current_collection['owner_name'],
+            'is_own' => ($selected_collection == $current_user_id),
         );
     }
     wp_reset_postdata();
@@ -217,6 +237,23 @@ foreach ($accessible_collections as $collection) {
     margin-bottom: 15px;
 }
 
+.indeterminate-section {
+    background: #cfe2ff;
+    border: 2px solid #0d6efd;
+    color: #084298;
+    padding: 12px 15px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.indeterminate-section-title {
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    margin-bottom: 6px;
+}
+
 .allergen-result {
     padding: 10px 12px;
     border-radius: 4px;
@@ -329,6 +366,18 @@ foreach ($accessible_collections as $collection) {
                 This tool assists in reading ingredient labels and recipes. It does not replace reading the label yourself. Always verify against the physical product before consuming.
             </div>
 
+            <?php if (!empty($result['indeterminate_ingredients'])): ?>
+            <div class="indeterminate-section">
+                <div class="indeterminate-section-title">Cannot determine — verify package label</div>
+                <div>This recipe includes packaged/compound ingredients whose own allergen content this tool cannot read from the recipe text alone. Check the physical product label for these:</div>
+                <?php foreach ($result['indeterminate_ingredients'] as $indeterminate): ?>
+                <div class="allergen-match-line">
+                    <span class="allergen-match-source"><?php echo esc_html($indeterminate['source']); ?></span><?php echo esc_html($indeterminate['line']); ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+
             <?php
             $flagged_allergens = array();
             $not_detected_allergens = array();
@@ -371,7 +420,23 @@ foreach ($accessible_collections as $collection) {
             <?php if (!empty($not_detected_allergens)): ?>
             <div class="not-detected-section">
                 <strong>Not detected</strong> (no match found by this tool — not the same as confirmed safe):
-                <?php echo esc_html(implode(', ', wp_list_pluck($not_detected_allergens, 'allergen_name'))); ?>
+                <?php
+                $not_detected_labels = array();
+                foreach ($not_detected_allergens as $allergen) {
+                    // Show what was actually searched for, for transparency.
+                    // Excludes the canonical name itself (already shown) and
+                    // truncates long alias lists rather than dumping all of them.
+                    $display_aliases = array_values(array_diff($allergen['aliases'], array(strtolower($allergen['allergen_name']))));
+                    if (!empty($display_aliases)) {
+                        $shown = array_slice($display_aliases, 0, 4);
+                        $suffix = count($display_aliases) > 4 ? ', ...' : '';
+                        $not_detected_labels[] = esc_html($allergen['allergen_name']) . ' <span style="color:#999; font-weight: normal;">(' . esc_html(implode(', ', $shown)) . $suffix . ')</span>';
+                    } else {
+                        $not_detected_labels[] = esc_html($allergen['allergen_name']);
+                    }
+                }
+                echo implode(', ', $not_detected_labels);
+                ?>
             </div>
             <?php endif; ?>
         </div>
@@ -380,6 +445,20 @@ foreach ($accessible_collections as $collection) {
 
     <div class="recipe-picker-box">
         <h2 style="margin-top: 0;">Select Recipes to Check</h2>
+
+        <?php if (count($accessible_collections) > 1): ?>
+        <div style="margin-bottom: 15px;">
+            <label for="allergen-collection-selector" style="font-weight: 600; margin-right: 8px;">📚 Collection:</label>
+            <select id="allergen-collection-selector" onchange="window.location.href='<?php echo home_url('/allergen-checker/'); ?>?collection=' + this.value" style="padding: 6px 12px; font-size: 14px; border: 2px solid #2271b1; border-radius: 4px;">
+                <?php foreach ($accessible_collections as $collection): ?>
+                <option value="<?php echo $collection['owner_id']; ?>" <?php selected($selected_collection, $collection['owner_id']); ?>>
+                    <?php echo esc_html($collection['owner_name']); ?>'s Recipes<?php echo ($collection['owner_id'] == $current_user_id) ? ' (Yours)' : ''; ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <?php endif; ?>
+
         <form method="post">
             <?php wp_nonce_field('run_allergen_check'); ?>
             <div class="recipe-picker-list">

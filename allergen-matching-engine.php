@@ -50,6 +50,48 @@ function is_precautionary_phrase($line) {
 }
 
 /**
+ * Fixed, human-reviewable list of compound/packaged-ingredient terms — items
+ * that are themselves a manufactured product with its own ingredient list
+ * the recipe text never states (e.g. "cake mix," "chocolate chips"), so a
+ * hidden allergen inside them cannot be ruled out from the recipe alone.
+ * Same philosophy and same maintenance model as get_precautionary_phrases():
+ * a plain list to extend as real recipes surface more cases, not a model
+ * call or a heuristic.
+ */
+function get_compound_ingredient_terms() {
+    return array(
+        'cake mix', 'brownie mix', 'muffin mix', 'pancake mix', 'waffle mix',
+        'biscuit mix', 'cornbread mix', 'bread mix',
+        'chocolate chips', 'butterscotch chips', 'peanut butter chips', 'caramel bits',
+        'chocolate bar', 'candy bar', 'dark chocolate', 'white chocolate', 'milk chocolate',
+        'frosting', 'icing', 'pudding mix', 'gelatin dessert', 'jello', 'marshmallow fluff',
+        'graham cracker crumbs', 'breadcrumbs', 'bread crumbs', 'panko', 'croutons', 'stuffing mix',
+        'pie crust', 'puff pastry', 'phyllo dough', 'pizza dough', 'cookie dough',
+        'bouillon', 'stock cube', 'gravy mix', 'gravy packet', 'soup mix', 'cream of mushroom soup',
+        'condensed soup', 'canned soup', 'taco seasoning', 'ranch dressing mix', 'onion soup mix',
+        'seasoning packet', 'salad dressing', 'barbecue sauce', 'bbq sauce', 'teriyaki sauce',
+        'hoisin sauce', 'enchilada sauce', 'alfredo sauce', 'curry paste',
+        'whipped topping', 'cool whip', 'coffee creamer', 'non-dairy creamer',
+        'imitation crab', 'veggie burger', 'plant-based meat', 'protein bar', 'granola bar',
+        'energy bar', 'trail mix', 'granola', 'cereal', 'instant noodles', 'ramen seasoning',
+    );
+}
+
+/**
+ * Whether a line names a compound/packaged ingredient whose own allergen
+ * content can't be determined from this text alone.
+ */
+function is_compound_ingredient_phrase($line) {
+    $line_lower = strtolower($line);
+    foreach (get_compound_ingredient_terms() as $phrase) {
+        if (strpos($line_lower, $phrase) !== false) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * Convert an HTML fragment (as stored in recipe postmeta) into an array of
  * plain-text lines. Deliberately a small self-contained helper rather than
  * reusing page-recipe-editor.php's html_to_plain_text() — that function is
@@ -161,12 +203,18 @@ function get_profile_match_terms($profile_id) {
  *   'allergens' => [
  *       allergen_id => [
  *           'allergen_name' => string,
+ *           'aliases' => [string, ...],  // full alias set searched for this allergen, for display transparency
  *           'tier' => 'contains'|'may_contain'|'not_detected',
  *           'matches' => [ ['line' => string, 'source' => string, 'precautionary' => bool], ... ],
  *       ],
  *       ...
  *   ],
  *   'general_cautions' => [ ['line' => string, 'source' => string], ... ],
+ *   'indeterminate_ingredients' => [ ['line' => string, 'source' => string], ... ],
+ *       // Lines naming a compound/packaged ingredient (e.g. "cake mix") whose
+ *       // own allergen content this tool cannot determine from recipe text
+ *       // alone — layered on top of, not instead of, whatever tier the line
+ *       // otherwise resolved to. "Cannot determine — verify package label."
  * ]
  */
 function run_allergen_check($item_type, $item_id, $profile_id) {
@@ -177,17 +225,23 @@ function run_allergen_check($item_type, $item_id, $profile_id) {
     foreach ($match_terms as $allergen_id => $term) {
         $allergens[$allergen_id] = array(
             'allergen_name' => $term['allergen_name'],
+            'aliases' => $term['aliases'],
             'tier' => 'not_detected',
             'matches' => array(),
         );
     }
 
     $general_cautions = array();
+    $indeterminate_ingredients = array();
 
     foreach ($tagged_lines as $tagged_line) {
         $line = $tagged_line['line'];
         $source = $tagged_line['source'];
         $is_precautionary = is_precautionary_phrase($line);
+
+        if (is_compound_ingredient_phrase($line)) {
+            $indeterminate_ingredients[] = array('line' => $line, 'source' => $source);
+        }
 
         $line_matched_any_allergen = false;
 
@@ -242,5 +296,6 @@ function run_allergen_check($item_type, $item_id, $profile_id) {
         'flagged' => $flagged,
         'allergens' => $allergens,
         'general_cautions' => $general_cautions,
+        'indeterminate_ingredients' => $indeterminate_ingredients,
     );
 }
