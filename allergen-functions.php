@@ -592,3 +592,52 @@ function delete_product($product_id, $acting_user_id) {
 
     return array('success' => true);
 }
+
+/**
+ * Get the products (full rows) attached to a recipe.
+ *
+ * Mirrors get_recipe_categories() in custom-category-functions.php — same
+ * join-table read pattern, applied to allergen_recipe_products instead of
+ * recipe_category_relationships.
+ */
+function get_recipe_products($recipe_id) {
+    global $wpdb;
+
+    return $wpdb->get_results($wpdb->prepare(
+        "SELECT p.*
+         FROM {$wpdb->prefix}allergen_products p
+         INNER JOIN {$wpdb->prefix}allergen_recipe_products r ON p.product_id = r.product_id
+         WHERE r.recipe_id = %d
+         ORDER BY p.product_name ASC",
+        $recipe_id
+    ));
+}
+
+/**
+ * Replace a recipe's attached-product set (delete-all-then-reinsert, same
+ * pattern as set_recipe_categories()/set_profile_allergens()).
+ */
+function set_recipe_products($recipe_id, $product_ids) {
+    global $wpdb;
+
+    $wpdb->delete(
+        $wpdb->prefix . 'allergen_recipe_products',
+        array('recipe_id' => $recipe_id),
+        array('%d')
+    );
+
+    if (!empty($product_ids)) {
+        foreach ($product_ids as $product_id) {
+            $wpdb->insert(
+                $wpdb->prefix . 'allergen_recipe_products',
+                array(
+                    'recipe_id' => $recipe_id,
+                    'product_id' => intval($product_id),
+                ),
+                array('%d', '%d')
+            );
+        }
+    }
+
+    return true;
+}
