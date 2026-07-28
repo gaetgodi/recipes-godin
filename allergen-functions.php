@@ -340,3 +340,134 @@ function set_profile_allergens($profile_id, $acting_user_id, $allergen_ids) {
 
     return array('success' => true);
 }
+
+/**
+ * Get all products owned by a user.
+ *
+ * Phase 5 will add product sharing (reusing collection-permissions.php's
+ * copy-on-share pattern, per the plan); Phase 3 is own-library only, so
+ * this deliberately doesn't take a "shared with me" branch yet.
+ */
+function get_user_products($user_id) {
+    global $wpdb;
+
+    return $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}allergen_products
+         WHERE owner_user_id = %d
+         ORDER BY product_name ASC",
+        $user_id
+    ));
+}
+
+/**
+ * Get a single product by ID.
+ */
+function get_product_by_id($product_id) {
+    global $wpdb;
+
+    return $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$wpdb->prefix}allergen_products WHERE product_id = %d",
+        $product_id
+    ));
+}
+
+/**
+ * Create a new product.
+ */
+function create_product($owner_user_id, $product_name, $ingredient_text, $source_image_attachment_id = null) {
+    global $wpdb;
+
+    $product_name = trim($product_name);
+    if (empty($product_name)) {
+        return array('error' => 'Product name cannot be empty');
+    }
+
+    $ingredient_text = trim($ingredient_text);
+    if (empty($ingredient_text)) {
+        return array('error' => 'Ingredient list cannot be empty');
+    }
+
+    $result = $wpdb->insert(
+        $wpdb->prefix . 'allergen_products',
+        array(
+            'product_name' => $product_name,
+            'ingredient_text' => $ingredient_text,
+            'owner_user_id' => $owner_user_id,
+            'source_image_attachment_id' => $source_image_attachment_id ? intval($source_image_attachment_id) : null,
+        ),
+        array('%s', '%s', '%d', '%d')
+    );
+
+    if ($result === false) {
+        return array('error' => 'Database error');
+    }
+
+    return array('success' => true, 'product_id' => $wpdb->insert_id);
+}
+
+/**
+ * Update a product. Only the owner may edit (Phase 3: no sharing yet, so
+ * this is a plain ownership check — the same reasoning applies as
+ * user_can_edit_profile(), just without a shares table to also consult
+ * since Phase 5 reuses collection-permissions.php's copy-on-share model
+ * for products instead of a join-table share model).
+ */
+function update_product($product_id, $acting_user_id, $product_name, $ingredient_text) {
+    global $wpdb;
+
+    $product = get_product_by_id($product_id);
+    if (!$product || $product->owner_user_id != $acting_user_id) {
+        return array('error' => 'You do not have permission to edit this product');
+    }
+
+    $product_name = trim($product_name);
+    if (empty($product_name)) {
+        return array('error' => 'Product name cannot be empty');
+    }
+
+    $ingredient_text = trim($ingredient_text);
+    if (empty($ingredient_text)) {
+        return array('error' => 'Ingredient list cannot be empty');
+    }
+
+    $result = $wpdb->update(
+        $wpdb->prefix . 'allergen_products',
+        array(
+            'product_name' => $product_name,
+            'ingredient_text' => $ingredient_text,
+        ),
+        array('product_id' => $product_id),
+        array('%s', '%s'),
+        array('%d')
+    );
+
+    if ($result === false) {
+        return array('error' => 'Database error');
+    }
+
+    return array('success' => true);
+}
+
+/**
+ * Delete a product. Only the owner may delete.
+ */
+function delete_product($product_id, $acting_user_id) {
+    global $wpdb;
+
+    $product = get_product_by_id($product_id);
+    if (!$product || $product->owner_user_id != $acting_user_id) {
+        return array('error' => 'You do not have permission to delete this product');
+    }
+
+    $result = $wpdb->delete(
+        $wpdb->prefix . 'allergen_products',
+        array('product_id' => $product_id),
+        array('%d')
+    );
+
+    if ($result === false) {
+        return array('error' => 'Database error');
+    }
+
+    return array('success' => true);
+}

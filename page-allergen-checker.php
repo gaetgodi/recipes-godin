@@ -2,9 +2,7 @@
 /**
  * Template Name: Allergen Checker
  *
- * Batch-check recipes against the user's active allergen profile.
- *
- * Phase 2: recipes only. Products are added to the batch picker in Phase 3.
+ * Batch-check recipes and products against the user's active allergen profile.
  */
 
 get_header();
@@ -25,14 +23,18 @@ $active_profile = get_active_allergen_profile($current_user_id);
 $results = array();
 $ran_check = false;
 $selected_recipe_ids = array();
+$selected_product_ids = array();
 
 if ($active_profile && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['run_allergen_check'])) {
     // Manual picker on this page: user checked boxes and clicked "Run Check".
     check_admin_referer('run_allergen_check');
     $selected_recipe_ids = isset($_POST['selected_recipe_ids']) ? array_map('intval', (array) $_POST['selected_recipe_ids']) : array();
+    $selected_product_ids = isset($_POST['selected_product_ids']) ? array_map('intval', (array) $_POST['selected_product_ids']) : array();
 } elseif ($active_profile && !empty($_GET['ids'])) {
     // Arrived via the "Check Allergens" bulk action on Recipe Manager —
-    // the selection was already made there, so run immediately.
+    // the selection was already made there, so run immediately. That
+    // action only ever selects recipes (products have no bulk-action
+    // entry point yet), so there's no product-side equivalent to read here.
     $selected_recipe_ids = array_map('intval', explode(',', $_GET['ids']));
 } elseif ($active_profile) {
     $transient_ids = get_transient('recipe_check_allergens_' . $current_user_id);
@@ -41,7 +43,7 @@ if ($active_profile && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ru
     }
 }
 
-if (!empty($selected_recipe_ids)) {
+if (!empty($selected_recipe_ids) || !empty($selected_product_ids)) {
     foreach ($selected_recipe_ids as $recipe_id) {
         $recipe_post = get_post($recipe_id);
         if (!$recipe_post || $recipe_post->post_type !== 'recipe') {
@@ -50,6 +52,19 @@ if (!empty($selected_recipe_ids)) {
 
         $report = run_allergen_check('recipe', $recipe_id, $active_profile->profile_id);
         $report['item_title'] = get_the_title($recipe_id);
+        $results[] = $report;
+    }
+
+    foreach ($selected_product_ids as $product_id) {
+        $product = get_product_by_id($product_id);
+        // Phase 3: own products only, no sharing yet — mirrors Phase 3
+        // scope for the product library generally.
+        if (!$product || $product->owner_user_id != $current_user_id) {
+            continue;
+        }
+
+        $report = run_allergen_check('product', $product_id, $active_profile->profile_id);
+        $report['item_title'] = $product->product_name;
         $results[] = $report;
     }
 
@@ -108,6 +123,9 @@ if ($current_collection) {
     }
     wp_reset_postdata();
 }
+
+// Own products only in Phase 3 — product sharing is Phase 5.
+$pickable_products = $active_profile ? get_user_products($current_user_id) : array();
 
 ?>
 
@@ -443,24 +461,25 @@ if ($current_collection) {
         <?php endforeach; ?>
     <?php endif; ?>
 
-    <div class="recipe-picker-box">
-        <h2 style="margin-top: 0;">Select Recipes to Check</h2>
+    <form method="post">
+        <?php wp_nonce_field('run_allergen_check'); ?>
 
-        <?php if (count($accessible_collections) > 1): ?>
-        <div style="margin-bottom: 15px;">
-            <label for="allergen-collection-selector" style="font-weight: 600; margin-right: 8px;">📚 Collection:</label>
-            <select id="allergen-collection-selector" onchange="window.location.href='<?php echo home_url('/allergen-checker/'); ?>?collection=' + this.value" style="padding: 6px 12px; font-size: 14px; border: 2px solid #2271b1; border-radius: 4px;">
-                <?php foreach ($accessible_collections as $collection): ?>
-                <option value="<?php echo $collection['owner_id']; ?>" <?php selected($selected_collection, $collection['owner_id']); ?>>
-                    <?php echo esc_html($collection['owner_name']); ?>'s Recipes<?php echo ($collection['owner_id'] == $current_user_id) ? ' (Yours)' : ''; ?>
-                </option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <?php endif; ?>
+        <div class="recipe-picker-box">
+            <h2 style="margin-top: 0;">Select Recipes to Check</h2>
 
-        <form method="post">
-            <?php wp_nonce_field('run_allergen_check'); ?>
+            <?php if (count($accessible_collections) > 1): ?>
+            <div style="margin-bottom: 15px;">
+                <label for="allergen-collection-selector" style="font-weight: 600; margin-right: 8px;">📚 Collection:</label>
+                <select id="allergen-collection-selector" onchange="window.location.href='<?php echo home_url('/allergen-checker/'); ?>?collection=' + this.value" style="padding: 6px 12px; font-size: 14px; border: 2px solid #2271b1; border-radius: 4px;">
+                    <?php foreach ($accessible_collections as $collection): ?>
+                    <option value="<?php echo $collection['owner_id']; ?>" <?php selected($selected_collection, $collection['owner_id']); ?>>
+                        <?php echo esc_html($collection['owner_name']); ?>'s Recipes<?php echo ($collection['owner_id'] == $current_user_id) ? ' (Yours)' : ''; ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
+
             <div class="recipe-picker-list">
                 <?php if (!empty($pickable_recipes)): ?>
                     <?php foreach ($pickable_recipes as $recipe): ?>
@@ -474,9 +493,28 @@ if ($current_collection) {
                     <p>No recipes available to check.</p>
                 <?php endif; ?>
             </div>
-            <button type="submit" name="run_allergen_check" class="run-check-btn">Run Check</button>
-        </form>
-    </div>
+        </div>
+
+        <div class="recipe-picker-box">
+            <h2 style="margin-top: 0;">Select Products to Check</h2>
+            <p style="font-size: 13px; color: #666; margin-top: 0;">From your <a href="<?php echo home_url('/allergen-products/'); ?>">Product Library</a>.</p>
+
+            <div class="recipe-picker-list">
+                <?php if (!empty($pickable_products)): ?>
+                    <?php foreach ($pickable_products as $product): ?>
+                    <label>
+                        <input type="checkbox" name="selected_product_ids[]" value="<?php echo $product->product_id; ?>" <?php checked(in_array($product->product_id, $selected_product_ids)); ?>>
+                        <?php echo esc_html($product->product_name); ?>
+                    </label>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <p>No products in your library yet. <a href="<?php echo home_url('/allergen-products/'); ?>">Scan one</a> to check it here.</p>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <button type="submit" name="run_allergen_check" class="run-check-btn">Run Check</button>
+    </form>
 
     <?php endif; ?>
 </div>

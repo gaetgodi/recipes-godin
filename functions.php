@@ -294,3 +294,4 @@ require_once(get_stylesheet_directory() . '/recipe-model-health-check.php');
 require_once(get_stylesheet_directory() . '/allergen-functions.php');
 require_once(get_stylesheet_directory() . '/allergen-permissions.php');
 require_once(get_stylesheet_directory() . '/allergen-matching-engine.php');
+require_once(get_stylesheet_directory() . '/allergen-image-upload-handler.php');
