@@ -444,11 +444,8 @@ function set_profile_allergens($profile_id, $acting_user_id, $allergen_ids) {
 }
 
 /**
- * Get all products owned by a user.
- *
- * Phase 5 will add product sharing (reusing collection-permissions.php's
- * copy-on-share pattern, per the plan); Phase 3 is own-library only, so
- * this deliberately doesn't take a "shared with me" branch yet.
+ * Get all products owned by a user — powers the Product Library page's
+ * "my products" list, where add/edit/delete happen.
  */
 function get_user_products($user_id) {
     global $wpdb;
@@ -459,6 +456,28 @@ function get_user_products($user_id) {
          ORDER BY product_name ASC",
         $user_id
     ));
+}
+
+/**
+ * Get every product in the system, across all users' libraries, each
+ * tagged with its owner's display name.
+ *
+ * Products are fully global for viewing/selecting — any logged-in user
+ * can check any product on the Allergen Checker page, no sharing step
+ * required (scope decision: skip the collection-style sharing/copy
+ * mechanism entirely for products). Editing/deleting remains
+ * creator-only regardless — see update_product()/delete_product(),
+ * which this function has no bearing on.
+ */
+function get_all_products() {
+    global $wpdb;
+
+    return $wpdb->get_results(
+        "SELECT p.*, u.display_name AS owner_display_name
+         FROM {$wpdb->prefix}allergen_products p
+         LEFT JOIN {$wpdb->users} u ON p.owner_user_id = u.ID
+         ORDER BY p.product_name ASC"
+    );
 }
 
 /**

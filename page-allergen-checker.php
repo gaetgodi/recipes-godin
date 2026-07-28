@@ -57,9 +57,11 @@ if (!empty($selected_recipe_ids) || !empty($selected_product_ids)) {
 
     foreach ($selected_product_ids as $product_id) {
         $product = get_product_by_id($product_id);
-        // Phase 3: own products only, no sharing yet — mirrors Phase 3
-        // scope for the product library generally.
-        if (!$product || $product->owner_user_id != $current_user_id) {
+        // Products are fully global for checking — any product, from
+        // any user's library, can be selected here. Only editing/deleting
+        // a product remains creator-only (enforced in update_product()/
+        // delete_product(), unrelated to this read-only check flow).
+        if (!$product) {
             continue;
         }
 
@@ -124,8 +126,10 @@ if ($current_collection) {
     wp_reset_postdata();
 }
 
-// Own products only in Phase 3 — product sharing is Phase 5.
-$pickable_products = $active_profile ? get_user_products($current_user_id) : array();
+// Products are fully global — every logged-in user can view/select any
+// product in the library, no sharing step required (scope decision:
+// products skip the collection-style sharing/copy model entirely).
+$pickable_products = $active_profile ? get_all_products() : array();
 
 ?>
 
@@ -501,7 +505,7 @@ $pickable_products = $active_profile ? get_user_products($current_user_id) : arr
 
         <div class="recipe-picker-box">
             <h2 style="margin-top: 0;">Select Products to Check</h2>
-            <p style="font-size: 13px; color: #666; margin-top: 0;">From your <a href="<?php echo home_url('/allergen-products/'); ?>">Product Library</a>.</p>
+            <p style="font-size: 13px; color: #666; margin-top: 0;">Every scanned product is available here, from any user's library. Manage your own in your <a href="<?php echo home_url('/allergen-products/'); ?>">Product Library</a>.</p>
 
             <?php if (!empty($pickable_products)): ?>
             <input type="text" id="productPickerSearch" placeholder="Search products by name..." oninput="filterPickerList('productPickerSearch', 'productPickerList')" style="width: 100%; padding: 8px 12px; margin-bottom: 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
@@ -513,10 +517,11 @@ $pickable_products = $active_profile ? get_user_products($current_user_id) : arr
                     <label class="picker-item" data-search-text="<?php echo esc_attr(strtolower($product->product_name)); ?>">
                         <input type="checkbox" name="selected_product_ids[]" value="<?php echo $product->product_id; ?>" <?php checked(in_array($product->product_id, $selected_product_ids)); ?>>
                         <?php echo esc_html($product->product_name); ?>
+                        <?php if ($product->owner_user_id != $current_user_id): ?><span style="color:#666;">(<?php echo esc_html($product->owner_display_name); ?>'s)</span><?php endif; ?>
                     </label>
                     <?php endforeach; ?>
                 <?php else: ?>
-                    <p>No products in your library yet. <a href="<?php echo home_url('/allergen-products/'); ?>">Scan one</a> to check it here.</p>
+                    <p>No products in the library yet. <a href="<?php echo home_url('/allergen-products/'); ?>">Scan one</a> to check it here.</p>
                 <?php endif; ?>
             </div>
         </div>
