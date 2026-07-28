@@ -161,10 +161,14 @@ if ($is_editing) {
     
     $recipe_categories_objs = get_recipe_categories($recipe_id);
     $recipe_category = array_map(function($cat) { return $cat->cat_id; }, $recipe_categories_objs);
-    
+
     // Get featured image if exists
     $featured_image_id = get_post_thumbnail_id($recipe_id);
     $featured_image_url = $featured_image_id ? wp_get_attachment_url($featured_image_id) : '';
+
+    // Allergen Checker v2: products already attached to this recipe
+    $attached_products_objs = get_recipe_products($recipe_id);
+    $attached_product_ids = array_map(function($product) { return $product->product_id; }, $attached_products_objs);
 } else {
     $recipe_title = '';
     $recipe_ingredients = '';
@@ -173,6 +177,7 @@ if ($is_editing) {
     $recipe_category = array();
     $featured_image_id = 0;
     $featured_image_url = '';
+    $attached_product_ids = array();
 }
 
 // Handle form submission
@@ -185,6 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
     $notes = sanitize_textarea_field($_POST['recipe_notes']);
     $categories = isset($_POST['recipe_categories']) ? array_map('intval', $_POST['recipe_categories']) : array();
     $new_featured_image_id = isset($_POST['featured_image_id']) ? intval($_POST['featured_image_id']) : 0;
+    $submitted_product_ids = isset($_POST['attached_product_ids']) ? array_map('intval', $_POST['attached_product_ids']) : array();
     
     function auto_format_content($content, $is_method = false) {
         if (empty($content)) return '';
@@ -265,7 +271,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
             } else {
                 set_recipe_categories($saved_id, array());
             }
-            
+
+            set_recipe_products($saved_id, $submitted_product_ids);
+
+
             $redirect_url = home_url('/recipe-manager/?saved=1' . $state_query);
             
             wp_redirect($redirect_url);
@@ -463,7 +472,49 @@ Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocol
                 <strong>💡 Tip:</strong> Just type one ingredient per line. They'll be formatted automatically as a nice list!
             </div>
         </div>
-        
+
+        <div class="form-group">
+            <label for="recipe_products">
+                Attached Products (Optional)
+            </label>
+            <span class="help-text">Attach real scanned products from the library (e.g. a specific brand of chocolate chips) so the Allergen Checker can check their actual ingredient list instead of guessing from the recipe text</span>
+
+            <input
+                type="text"
+                id="productSearchInput"
+                placeholder="Search products by name..."
+                oninput="filterAttachedProductPicker()"
+                style="width: 100%; padding: 8px 12px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;"
+            />
+
+            <div id="attachedProductPickerList" style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; background: #fafafa; max-height: 300px; overflow-y: auto;">
+                <?php
+                $all_allergen_products = get_all_products();
+
+                if (empty($all_allergen_products)) {
+                    echo '<div style="padding: 20px; text-align: center; color: #666;">';
+                    echo '<p style="margin: 0 0 10px 0;"><strong>No products in the library yet!</strong></p>';
+                    echo '<p style="margin: 0; font-size: 14px;">Scan a product label to add one.</p>';
+                    echo '<p style="margin: 10px 0 0 0;"><a href="' . home_url('/allergen-products/') . '" style="color: #2271b1; text-decoration: underline;">→ Go to Product Library</a></p>';
+                    echo '</div>';
+                } else {
+                    foreach ($all_allergen_products as $product) {
+                        $checked = in_array($product->product_id, $attached_product_ids) ? 'checked' : '';
+                        echo '<div class="product-picker-item" data-search-text="' . esc_attr(strtolower($product->product_name)) . '" style="margin-bottom: 8px;">';
+                        echo '<label style="display: flex; align-items: center; cursor: pointer; font-weight: normal;">';
+                        echo '<input type="checkbox" name="attached_product_ids[]" value="' . $product->product_id . '" ' . $checked . ' style="margin-right: 8px; width: 18px; height: 18px;">';
+                        echo '<span>' . esc_html($product->product_name) . '</span>';
+                        echo '</label>';
+                        echo '</div>';
+                    }
+                }
+                ?>
+            </div>
+            <div class="tip-box" style="margin-top: 10px;">
+                <strong>💡 Tip:</strong> Zero products is normal for most recipes — only attach products for ingredients that are themselves packaged (like a specific brand of cake mix), not for plain ingredients like flour or eggs.
+            </div>
+        </div>
+
         <div class="form-group">
             <label for="recipe_method">
                 Method/Instructions <span class="required">*</span>
@@ -597,6 +648,17 @@ Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocol
 </style>
 
 <script>
+// Allergen Checker v2: filter the attached-products checklist by search text
+function filterAttachedProductPicker() {
+    const searchTerm = document.getElementById('productSearchInput').value.toLowerCase().trim();
+    const items = document.querySelectorAll('#attachedProductPickerList .product-picker-item');
+
+    items.forEach(function(item) {
+        const text = item.getAttribute('data-search-text') || '';
+        item.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
+}
+
 // Tab switching
 function switchTab(tab) {
     document.getElementById('imageTab').classList.remove('active');

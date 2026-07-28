@@ -149,6 +149,19 @@ if (!empty($state_parts)) {
             </div>
             <?php endif; ?>
 
+            <?php $attached_products = get_recipe_products($post_id); ?>
+            <?php if (!empty($attached_products)): ?>
+            <div style="grid-column: 1 / -1; margin-top: 20px; padding-top: 20px; border-top: 2px dashed #ddd;">
+                <h3 style="color: #c84a31; font-size: 18px; margin: 0 0 10px 0;">Products</h3>
+                <p style="color: #666; font-size: 13px; margin: 0 0 10px 0;">Specific scanned products attached to this recipe, for accurate allergen checking:</p>
+                <ul style="margin: 0; padding-left: 20px;">
+                    <?php foreach ($attached_products as $product): ?>
+                    <li><?php echo esc_html($product->product_name); ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
+
             <?php $featured_image_url = get_the_post_thumbnail_url($post_id, 'large'); ?>
             <?php if ($featured_image_url): ?>
             <div style="grid-column: 1 / -1; margin-top: 20px; padding-top: 20px; border-top: 2px dashed #ddd;">
