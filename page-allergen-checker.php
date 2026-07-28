@@ -24,12 +24,24 @@ $active_profile = get_active_allergen_profile($current_user_id);
 
 $results = array();
 $ran_check = false;
+$selected_recipe_ids = array();
 
 if ($active_profile && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['run_allergen_check'])) {
+    // Manual picker on this page: user checked boxes and clicked "Run Check".
     check_admin_referer('run_allergen_check');
-
     $selected_recipe_ids = isset($_POST['selected_recipe_ids']) ? array_map('intval', (array) $_POST['selected_recipe_ids']) : array();
+} elseif ($active_profile && !empty($_GET['ids'])) {
+    // Arrived via the "Check Allergens" bulk action on Recipe Manager —
+    // the selection was already made there, so run immediately.
+    $selected_recipe_ids = array_map('intval', explode(',', $_GET['ids']));
+} elseif ($active_profile) {
+    $transient_ids = get_transient('recipe_check_allergens_' . $current_user_id);
+    if (!empty($transient_ids)) {
+        $selected_recipe_ids = array_map('intval', $transient_ids);
+    }
+}
 
+if (!empty($selected_recipe_ids)) {
     foreach ($selected_recipe_ids as $recipe_id) {
         $recipe_post = get_post($recipe_id);
         if (!$recipe_post || $recipe_post->post_type !== 'recipe') {
@@ -374,7 +386,7 @@ foreach ($accessible_collections as $collection) {
                 <?php if (!empty($pickable_recipes)): ?>
                     <?php foreach ($pickable_recipes as $recipe): ?>
                     <label>
-                        <input type="checkbox" name="selected_recipe_ids[]" value="<?php echo $recipe['id']; ?>">
+                        <input type="checkbox" name="selected_recipe_ids[]" value="<?php echo $recipe['id']; ?>" <?php checked(in_array($recipe['id'], $selected_recipe_ids)); ?>>
                         <?php echo esc_html($recipe['title']); ?>
                         <?php if (!$recipe['is_own']): ?><span style="color:#666;">(<?php echo esc_html($recipe['owner_name']); ?>'s)</span><?php endif; ?>
                     </label>

@@ -113,9 +113,18 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
             
         case 'print':
             set_transient('recipe_print_' . get_current_user_id(), $selected_ids, 300);
-            
+
             $redirect_url = home_url('/recipe-print-page/?ids=' . implode(',', $selected_ids) . $state_query);
-            
+
+            wp_redirect($redirect_url);
+            exit;
+            break;
+
+        case 'check_allergens':
+            set_transient('recipe_check_allergens_' . get_current_user_id(), $selected_ids, 300);
+
+            $redirect_url = home_url('/allergen-checker/?ids=' . implode(',', $selected_ids));
+
             wp_redirect($redirect_url);
             exit;
             break;

@@ -15,7 +15,9 @@ function updateSelectedCount() {
     const shareBtnTop = document.getElementById('shareBtnTop');
     const deleteBtn = document.getElementById('deleteBtn');
     const deleteBtnTop = document.getElementById('deleteBtnTop');
-    
+    const checkAllergensBtn = document.getElementById('checkAllergensBtn');
+    const checkAllergensBtnTop = document.getElementById('checkAllergensBtnTop');
+
     // View buttons
     if (viewBtn) viewBtn.disabled = (checked === 0);
     if (viewBtnTop) viewBtnTop.disabled = (checked === 0);
@@ -39,6 +41,10 @@ function updateSelectedCount() {
     // Delete buttons
     if (deleteBtn) deleteBtn.disabled = (checked === 0);
     if (deleteBtnTop) deleteBtnTop.disabled = (checked === 0);
+
+    // Check Allergens buttons
+    if (checkAllergensBtn) checkAllergensBtn.disabled = (checked === 0);
+    if (checkAllergensBtnTop) checkAllergensBtnTop.disabled = (checked === 0);
 }
 
 function toggleSelectAll() {

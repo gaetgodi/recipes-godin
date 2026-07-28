@@ -318,7 +318,26 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
         </div>
     </div>
     <?php endif; ?>
-    
+
+    <?php
+    $active_allergen_profile = get_active_allergen_profile(get_current_user_id());
+    ?>
+    <div style="margin-bottom: 20px; padding: 10px 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; font-size: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        <span>
+            <?php if ($active_allergen_profile): ?>
+            🩺 Active allergen profile: <strong><?php echo esc_html($active_allergen_profile->profile_name); ?></strong><?php if ($active_allergen_profile->profile_age !== null): ?>, age <?php echo esc_html($active_allergen_profile->profile_age); ?><?php endif; ?>
+            <?php else: ?>
+            🩺 No active allergen profile selected.
+            <?php endif; ?>
+        </span>
+        <span style="display: flex; gap: 12px; align-items: center;">
+            <a href="<?php echo home_url('/allergen-profiles/'); ?>"><?php echo $active_allergen_profile ? 'Change profile' : 'Set up a profile'; ?></a>
+            <button onclick="window.location.href='<?php echo home_url('/allergen-checker/'); ?>'" class="action-btn" style="background: #c84a31; color: white;">
+                🩺 Allergen Checker
+            </button>
+        </span>
+    </div>
+
     <?php
     if (isset($_GET['saved'])) {
         echo '<div style="background: #d4edda; padding: 15px; margin: 20px 0; border: 1px solid #c3e6cb; color: #155724; border-radius: 4px;">✅ Recipe saved successfully!</div>';
@@ -541,21 +560,26 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
             <button type="submit" name="bulk_action" value="print" class="action-btn btn-print" id="printBtnTop" disabled>
                 🖨️ Print Book
             </button>
-            
+
+            <button type="submit" name="bulk_action" value="check_allergens" class="action-btn" style="background: #c84a31; color: white;" id="checkAllergensBtnTop" disabled
+                    title="Check selected recipes against your active allergen profile">
+                🩺 Check Allergens
+            </button>
+
             <?php if (($can_view_only || $is_admin) && $selected_collection !== get_current_user_id()): ?>
             <button type="submit" name="bulk_action" value="copy_to_my_recipes" class="action-btn" style="background: #3498db; color: white;" id="copyToMyBtnTop" disabled
                     title="This makes a copy in my collection">
                 📋 Copy to My Recipes
             </button>
             <?php endif; ?>
-            
+
             <?php if (current_user_can('edit_posts') && $can_manage): ?>
-            <button type="submit" name="bulk_action" value="copy" class="action-btn btn-copy" id="copyBtnTop" disabled 
+            <button type="submit" name="bulk_action" value="copy" class="action-btn btn-copy" id="copyBtnTop" disabled
                     onclick="return confirm('Copy the first selected recipe?')"
                     title="This makes another copy here">
                 📋 Copy
             </button>
-            
+
             <button type="submit" name="bulk_action" value="delete" class="action-btn btn-delete" id="deleteBtnTop" disabled
                     onclick="return confirm('Are you sure you want to delete the selected recipes? This cannot be undone.')">
                 🗑️ Delete
@@ -643,21 +667,26 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
             <button type="submit" name="bulk_action" value="print" class="action-btn btn-print" id="printBtn" disabled>
                 🖨️ Print Book
             </button>
-            
+
+            <button type="submit" name="bulk_action" value="check_allergens" class="action-btn" style="background: #c84a31; color: white;" id="checkAllergensBtn" disabled
+                    title="Check selected recipes against your active allergen profile">
+                🩺 Check Allergens
+            </button>
+
             <?php if (($can_view_only || $is_admin) && $selected_collection !== get_current_user_id()): ?>
             <button type="submit" name="bulk_action" value="copy_to_my_recipes" class="action-btn" style="background: #3498db; color: white;" id="copyToMyBtn" disabled
                     title="This makes a copy in my collection">
                 📋 Copy to My Recipes
             </button>
             <?php endif; ?>
-            
+
             <?php if (current_user_can('edit_posts') && $can_manage): ?>
-            <button type="submit" name="bulk_action" value="copy" class="action-btn btn-copy" id="copyBtn" disabled 
+            <button type="submit" name="bulk_action" value="copy" class="action-btn btn-copy" id="copyBtn" disabled
                     onclick="return confirm('Copy the first selected recipe?')"
                     title="This makes another copy here">
                 📋 Copy
             </button>
-            
+
             <button type="submit" name="bulk_action" value="delete" class="action-btn btn-delete" id="deleteBtn" disabled
                     onclick="return confirm('Are you sure you want to delete the selected recipes? This cannot be undone.')">
                 🗑️ Delete
