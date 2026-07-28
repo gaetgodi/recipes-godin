@@ -480,10 +480,14 @@ $pickable_products = $active_profile ? get_user_products($current_user_id) : arr
             </div>
             <?php endif; ?>
 
-            <div class="recipe-picker-list">
+            <?php if (!empty($pickable_recipes)): ?>
+            <input type="text" id="recipePickerSearch" placeholder="Search recipes by title..." oninput="filterPickerList('recipePickerSearch', 'recipePickerList')" style="width: 100%; padding: 8px 12px; margin-bottom: 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+            <?php endif; ?>
+
+            <div class="recipe-picker-list" id="recipePickerList">
                 <?php if (!empty($pickable_recipes)): ?>
                     <?php foreach ($pickable_recipes as $recipe): ?>
-                    <label>
+                    <label class="picker-item" data-search-text="<?php echo esc_attr(strtolower($recipe['title'])); ?>">
                         <input type="checkbox" name="selected_recipe_ids[]" value="<?php echo $recipe['id']; ?>" <?php checked(in_array($recipe['id'], $selected_recipe_ids)); ?>>
                         <?php echo esc_html($recipe['title']); ?>
                         <?php if (!$recipe['is_own']): ?><span style="color:#666;">(<?php echo esc_html($recipe['owner_name']); ?>'s)</span><?php endif; ?>
@@ -499,10 +503,14 @@ $pickable_products = $active_profile ? get_user_products($current_user_id) : arr
             <h2 style="margin-top: 0;">Select Products to Check</h2>
             <p style="font-size: 13px; color: #666; margin-top: 0;">From your <a href="<?php echo home_url('/allergen-products/'); ?>">Product Library</a>.</p>
 
-            <div class="recipe-picker-list">
+            <?php if (!empty($pickable_products)): ?>
+            <input type="text" id="productPickerSearch" placeholder="Search products by name..." oninput="filterPickerList('productPickerSearch', 'productPickerList')" style="width: 100%; padding: 8px 12px; margin-bottom: 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+            <?php endif; ?>
+
+            <div class="recipe-picker-list" id="productPickerList">
                 <?php if (!empty($pickable_products)): ?>
                     <?php foreach ($pickable_products as $product): ?>
-                    <label>
+                    <label class="picker-item" data-search-text="<?php echo esc_attr(strtolower($product->product_name)); ?>">
                         <input type="checkbox" name="selected_product_ids[]" value="<?php echo $product->product_id; ?>" <?php checked(in_array($product->product_id, $selected_product_ids)); ?>>
                         <?php echo esc_html($product->product_name); ?>
                     </label>
@@ -518,5 +526,18 @@ $pickable_products = $active_profile ? get_user_products($current_user_id) : arr
 
     <?php endif; ?>
 </div>
+
+<script>
+function filterPickerList(searchInputId, listId) {
+    const searchTerm = document.getElementById(searchInputId).value.toLowerCase().trim();
+    const list = document.getElementById(listId);
+    const items = list.querySelectorAll('.picker-item');
+
+    items.forEach(function(item) {
+        const text = item.getAttribute('data-search-text') || '';
+        item.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
+}
+</script>
 
 <?php get_footer(); ?>
