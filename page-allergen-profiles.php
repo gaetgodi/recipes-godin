@@ -2,10 +2,8 @@
 /**
  * Template Name: Allergen Profiles
  *
- * Manage allergen profiles — create/edit/delete, select allergens, set active profile.
- *
- * Phase 1: own profiles only. Profile sharing (view shared-with-me profiles,
- * share-with-user form) is added in Phase 4.
+ * Manage allergen profiles — create/edit/delete, select allergens, set
+ * active profile, share with other users (view/apply only — never edit).
  */
 
 get_header();
@@ -96,6 +94,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // Share a profile with another user
+    if (isset($_POST['share_profile'])) {
+        $profile_id = intval($_POST['profile_id']);
+        check_admin_referer('share_profile_' . $profile_id);
+
+        $target_user_id = intval($_POST['share_with_user_id']);
+        $result = share_profile($profile_id, $current_user_id, $target_user_id);
+
+        if (isset($result['error'])) {
+            $message = 'Error: ' . $result['error'];
+            $message_type = 'error';
+        } else {
+            $message = 'Profile shared.';
+            $message_type = 'success';
+        }
+    }
+
+    // Revoke a profile share
+    if (isset($_POST['unshare_profile'])) {
+        $profile_id = intval($_POST['profile_id']);
+        check_admin_referer('unshare_profile_' . $profile_id);
+
+        $target_user_id = intval($_POST['share_with_user_id']);
+        $result = unshare_profile($profile_id, $current_user_id, $target_user_id);
+
+        if (isset($result['error'])) {
+            $message = 'Error: ' . $result['error'];
+            $message_type = 'error';
+        } else {
+            $message = 'Sharing access revoked.';
+            $message_type = 'success';
+        }
+    }
+
     // Add a custom allergen to the user's own library
     if (isset($_POST['add_custom_allergen'])) {
         check_admin_referer('add_custom_allergen');
@@ -157,6 +189,13 @@ $seed_allergens = get_seed_allergens();
 $custom_allergens = get_user_custom_allergens($current_user_id);
 $active_profile = get_active_allergen_profile($current_user_id);
 $active_profile_id = $active_profile ? $active_profile->profile_id : 0;
+
+$shared_with_me = get_profiles_accessible_to_user($current_user_id)['shared'];
+
+// Any registered user is a valid share recipient — allergen profiles are
+// available to every logged-in user (not just authors/editors), so
+// sharing isn't restricted by role the way collection sharing is.
+$shareable_users = get_users(array('exclude' => array($current_user_id)));
 
 ?>
 
@@ -555,6 +594,8 @@ div.edit-row.active {
                         </form>
                         <?php endif; ?>
 
+                        <button type="button" onclick="toggleShare(<?php echo $profile->profile_id; ?>)" class="btn" style="background: #7c3aed; color: white;">🔗 Share</button>
+
                         <form method="post" style="display: inline;">
                             <?php wp_nonce_field('delete_profile_' . $profile->profile_id); ?>
                             <input type="hidden" name="profile_id" value="<?php echo $profile->profile_id; ?>">
@@ -611,6 +652,50 @@ div.edit-row.active {
                         </form>
                     </td>
                 </tr>
+
+                <!-- Share Row -->
+                <tr id="share-<?php echo $profile->profile_id; ?>" class="edit-row">
+                    <td colspan="4">
+                        <h4 style="margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; color: #666;">Shared With</h4>
+                        <?php
+                        $current_shares = get_profile_shares($profile->profile_id);
+                        if (!empty($current_shares)):
+                        ?>
+                        <div style="margin-bottom: 12px;">
+                            <?php foreach ($current_shares as $shared_user): ?>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #eee;">
+                                <span><?php echo esc_html($shared_user->display_name); ?></span>
+                                <form method="post" style="display: inline;">
+                                    <?php wp_nonce_field('unshare_profile_' . $profile->profile_id); ?>
+                                    <input type="hidden" name="profile_id" value="<?php echo $profile->profile_id; ?>">
+                                    <input type="hidden" name="share_with_user_id" value="<?php echo $shared_user->ID; ?>">
+                                    <button type="submit" name="unshare_profile" class="btn btn-delete" style="padding: 3px 10px; font-size: 12px;">Revoke</button>
+                                </form>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php else: ?>
+                        <p style="color: #999; font-size: 13px;">Not shared with anyone yet.</p>
+                        <?php endif; ?>
+
+                        <?php if (!empty($shareable_users)): ?>
+                        <form method="post" style="display: flex; gap: 8px; align-items: center;">
+                            <?php wp_nonce_field('share_profile_' . $profile->profile_id); ?>
+                            <input type="hidden" name="profile_id" value="<?php echo $profile->profile_id; ?>">
+                            <select name="share_with_user_id" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 3px;">
+                                <?php foreach ($shareable_users as $user): ?>
+                                <option value="<?php echo $user->ID; ?>"><?php echo esc_html($user->display_name); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" name="share_profile" class="btn" style="background: #7c3aed; color: white;">Share</button>
+                        </form>
+                        <?php endif; ?>
+
+                        <div style="margin-top: 10px;">
+                            <button type="button" onclick="toggleShare(<?php echo $profile->profile_id; ?>)" class="btn btn-cancel">Close</button>
+                        </div>
+                    </td>
+                </tr>
                 <?php endforeach; ?>
             <?php else: ?>
             <tr>
@@ -621,9 +706,63 @@ div.edit-row.active {
             <?php endif; ?>
         </tbody>
     </table>
+
+    <?php if (!empty($shared_with_me)): ?>
+    <h2 style="margin-top: 30px;">Shared With Me</h2>
+    <p style="color: #666; font-size: 14px; margin-top: 0;">You can view and set these active, but only their creator can edit the allergen list.</p>
+    <table class="profiles-table">
+        <thead>
+            <tr>
+                <th>Profile</th>
+                <th>Age</th>
+                <th>Allergens</th>
+                <th style="width: 160px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($shared_with_me as $profile):
+                $profile_allergens = get_profile_allergens($profile->profile_id);
+                $is_active = ($profile->profile_id == $active_profile_id);
+                $owner = get_userdata($profile->owner_user_id);
+            ?>
+            <tr>
+                <td>
+                    <strong><?php echo esc_html($profile->profile_name); ?></strong>
+                    <?php if ($is_active): ?><span class="active-badge">Active</span><?php endif; ?>
+                    <div style="color: #999; font-size: 12px;">Shared by <?php echo esc_html($owner ? $owner->display_name : 'Unknown'); ?></div>
+                </td>
+                <td><?php echo $profile->profile_age !== null ? esc_html($profile->profile_age) : '—'; ?></td>
+                <td>
+                    <?php
+                    if (!empty($profile_allergens)) {
+                        echo esc_html(implode(', ', wp_list_pluck($profile_allergens, 'allergen_name')));
+                    } else {
+                        echo '<span style="color: #999;">None selected</span>';
+                    }
+                    ?>
+                </td>
+                <td>
+                    <?php if (!$is_active): ?>
+                    <form method="post">
+                        <?php wp_nonce_field('set_active_profile_' . $profile->profile_id); ?>
+                        <input type="hidden" name="profile_id" value="<?php echo $profile->profile_id; ?>">
+                        <button type="submit" name="set_active_profile" class="btn btn-activate">Set Active</button>
+                    </form>
+                    <?php endif; ?>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+    <?php endif; ?>
 </div>
 
 <script>
+function toggleShare(profileId) {
+    const row = document.getElementById('share-' + profileId);
+    row.classList.toggle('active');
+}
+
 function editProfile(profileId) {
     document.getElementById('view-' + profileId).style.display = 'none';
     document.getElementById('edit-' + profileId).classList.add('active');

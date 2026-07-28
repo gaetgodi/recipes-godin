@@ -13,9 +13,10 @@
  * can edit," on medical data, which is why user_can_edit_profile() is a
  * plain ownership check with nothing else layered on top of it.
  *
- * Phase 1 note: share_profile()/unshare_profile() are added in Phase 4.
- * The functions below already read allergen_profile_shares so nothing
- * here needs to change when sharing is introduced.
+ * Phase 4: share_profile()/unshare_profile()/get_profile_shares() below
+ * manage the allergen_profile_shares rows. Sharing is a creator-only
+ * action, gated the same way as editing (user_can_edit_profile) — only
+ * the person who built the profile decides who else can see it.
  */
 
 // Security check
@@ -85,6 +86,106 @@ function get_profiles_accessible_to_user($user_id) {
     }
 
     return array('own' => $own, 'shared' => $shared);
+}
+
+/**
+ * Share a profile with another user (view/apply only — never edit rights).
+ * Only the creator may share. Refuses self-sharing and duplicate rows.
+ */
+function share_profile($profile_id, $acting_user_id, $target_user_id) {
+    global $wpdb;
+
+    $profile = get_profile_by_id($profile_id);
+    if (!$profile || !user_can_edit_profile($acting_user_id, $profile)) {
+        return array('error' => 'You do not have permission to share this profile');
+    }
+
+    $target_user_id = intval($target_user_id);
+
+    if ($target_user_id == $acting_user_id) {
+        return array('error' => 'You cannot share a profile with yourself');
+    }
+
+    $target_user = get_userdata($target_user_id);
+    if (!$target_user) {
+        return array('error' => 'That user could not be found');
+    }
+
+    $existing = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->prefix}allergen_profile_shares
+         WHERE profile_id = %d AND shared_with_user_id = %d",
+        $profile_id,
+        $target_user_id
+    ));
+
+    if ($existing > 0) {
+        return array('error' => 'Already shared with that user');
+    }
+
+    $result = $wpdb->insert(
+        $wpdb->prefix . 'allergen_profile_shares',
+        array(
+            'profile_id' => $profile_id,
+            'shared_with_user_id' => $target_user_id,
+        ),
+        array('%d', '%d')
+    );
+
+    if ($result === false) {
+        return array('error' => 'Database error');
+    }
+
+    return array('success' => true);
+}
+
+/**
+ * Revoke a profile share. Only the creator may revoke.
+ */
+function unshare_profile($profile_id, $acting_user_id, $target_user_id) {
+    global $wpdb;
+
+    $profile = get_profile_by_id($profile_id);
+    if (!$profile || !user_can_edit_profile($acting_user_id, $profile)) {
+        return array('error' => 'You do not have permission to modify sharing for this profile');
+    }
+
+    $result = $wpdb->delete(
+        $wpdb->prefix . 'allergen_profile_shares',
+        array(
+            'profile_id' => $profile_id,
+            'shared_with_user_id' => intval($target_user_id),
+        ),
+        array('%d', '%d')
+    );
+
+    if ($result === false) {
+        return array('error' => 'Database error');
+    }
+
+    return array('success' => true);
+}
+
+/**
+ * Get the users a profile is currently shared with, as WP_User objects.
+ */
+function get_profile_shares($profile_id) {
+    global $wpdb;
+
+    $shared_user_ids = $wpdb->get_col($wpdb->prepare(
+        "SELECT shared_with_user_id FROM {$wpdb->prefix}allergen_profile_shares
+         WHERE profile_id = %d",
+        $profile_id
+    ));
+
+    $users = array();
+    foreach ($shared_user_ids as $user_id) {
+        $user = get_userdata($user_id);
+        if ($user) {
+            $users[] = $user;
+        }
+    }
+
+    return $users;
 }
 
 /**
