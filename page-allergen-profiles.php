@@ -114,6 +114,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message_type = 'success';
         }
     }
+
+    // Save edits to a custom allergen (name + alias set)
+    if (isset($_POST['edit_custom_allergen'])) {
+        $allergen_id = intval($_POST['allergen_id']);
+        check_admin_referer('edit_custom_allergen_' . $allergen_id);
+
+        $allergen_name = sanitize_text_field($_POST['custom_allergen_name']);
+        $alias_input = isset($_POST['custom_allergen_aliases']) ? sanitize_textarea_field($_POST['custom_allergen_aliases']) : '';
+        $aliases = array_filter(array_map('trim', preg_split('/[,\n]/', $alias_input)));
+
+        $result = update_custom_allergen($allergen_id, $current_user_id, $allergen_name, $aliases);
+
+        if (isset($result['error'])) {
+            $message = 'Error: ' . $result['error'];
+            $message_type = 'error';
+        } else {
+            $message = "Custom allergen '{$allergen_name}' updated.";
+            $message_type = 'success';
+        }
+    }
+
+    // Delete a custom allergen
+    if (isset($_POST['delete_custom_allergen'])) {
+        $allergen_id = intval($_POST['allergen_id']);
+        check_admin_referer('delete_custom_allergen_' . $allergen_id);
+
+        $result = delete_custom_allergen($allergen_id, $current_user_id);
+
+        if (isset($result['error'])) {
+            $message = 'Error: ' . $result['error'];
+            $message_type = 'error';
+        } else {
+            $message = 'Custom allergen deleted and removed from any profiles that had it selected.';
+            $message_type = 'success';
+        }
+    }
 }
 
 $profiles = get_user_profiles($current_user_id);
@@ -270,6 +306,10 @@ $active_profile_id = $active_profile ? $active_profile->profile_id : 0;
     display: table-row;
 }
 
+div.edit-row.active {
+    display: block;
+}
+
 .edit-form-fields {
     display: flex;
     gap: 10px;
@@ -421,6 +461,54 @@ $active_profile_id = $active_profile ? $active_profile->profile_id : 0;
             <textarea name="custom_allergen_aliases" placeholder="Optional aliases, comma or newline separated (e.g., kiwifruit, actinidia)"></textarea>
             <button type="submit" name="add_custom_allergen" class="btn" style="background: #6c757d; color: white;">+ Add Allergen</button>
         </form>
+
+        <?php if (!empty($custom_allergens)): ?>
+        <div style="margin-top: 20px;">
+            <h4 style="font-size: 13px; text-transform: uppercase; color: #666; margin-bottom: 8px;">Your Custom Allergens</h4>
+            <?php foreach ($custom_allergens as $custom_allergen):
+                $custom_aliases = get_allergen_aliases($custom_allergen->allergen_id);
+                $custom_alias_texts = wp_list_pluck($custom_aliases, 'alias_text');
+                $custom_alias_display = array_values(array_diff($custom_alias_texts, array(strtolower($custom_allergen->allergen_name))));
+            ?>
+            <!-- View Row -->
+            <div id="view-allergen-<?php echo $custom_allergen->allergen_id; ?>" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
+                <div>
+                    <strong><?php echo esc_html($custom_allergen->allergen_name); ?></strong>
+                    <?php if (!empty($custom_alias_display)): ?>
+                    <span style="color: #999; font-size: 13px;">(<?php echo esc_html(implode(', ', $custom_alias_display)); ?>)</span>
+                    <?php endif; ?>
+                </div>
+                <div>
+                    <button type="button" onclick="editAllergen(<?php echo $custom_allergen->allergen_id; ?>)" class="btn btn-edit">✏️ Edit</button>
+                    <form method="post" style="display: inline;">
+                        <?php wp_nonce_field('delete_custom_allergen_' . $custom_allergen->allergen_id); ?>
+                        <input type="hidden" name="allergen_id" value="<?php echo $custom_allergen->allergen_id; ?>">
+                        <button
+                            type="submit"
+                            name="delete_custom_allergen"
+                            class="btn btn-delete"
+                            onclick="return confirm('Delete allergen \'<?php echo esc_js($custom_allergen->allergen_name); ?>\'? It will be removed from any profiles that have it selected.')"
+                        >🗑️ Delete</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Edit Row -->
+            <div id="edit-allergen-<?php echo $custom_allergen->allergen_id; ?>" class="edit-row" style="padding: 10px 0; border-bottom: 1px solid #eee;">
+                <form method="post">
+                    <?php wp_nonce_field('edit_custom_allergen_' . $custom_allergen->allergen_id); ?>
+                    <input type="hidden" name="allergen_id" value="<?php echo $custom_allergen->allergen_id; ?>">
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;">
+                        <input type="text" name="custom_allergen_name" value="<?php echo esc_attr($custom_allergen->allergen_name); ?>" style="flex: 1; min-width: 150px; padding: 8px; border: 1px solid #ddd; border-radius: 3px;" required />
+                        <textarea name="custom_allergen_aliases" style="flex: 2; min-width: 220px; padding: 8px; border: 1px solid #ddd; border-radius: 3px; min-height: 40px;" placeholder="Aliases, comma or newline separated"><?php echo esc_textarea(implode(', ', $custom_alias_display)); ?></textarea>
+                    </div>
+                    <button type="submit" name="edit_custom_allergen" class="btn btn-save">✓ Save</button>
+                    <button type="button" onclick="cancelEditAllergen(<?php echo $custom_allergen->allergen_id; ?>)" class="btn btn-cancel">Cancel</button>
+                </form>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
     </div>
 
     <!-- Profiles List -->
@@ -544,6 +632,16 @@ function editProfile(profileId) {
 function cancelEditProfile(profileId) {
     document.getElementById('view-' + profileId).style.display = 'table-row';
     document.getElementById('edit-' + profileId).classList.remove('active');
+}
+
+function editAllergen(allergenId) {
+    document.getElementById('view-allergen-' + allergenId).style.display = 'none';
+    document.getElementById('edit-allergen-' + allergenId).classList.add('active');
+}
+
+function cancelEditAllergen(allergenId) {
+    document.getElementById('view-allergen-' + allergenId).style.display = 'flex';
+    document.getElementById('edit-allergen-' + allergenId).classList.remove('active');
 }
 </script>
 

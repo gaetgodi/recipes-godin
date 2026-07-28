@@ -239,7 +239,12 @@ function run_allergen_check($item_type, $item_id, $profile_id) {
         $source = $tagged_line['source'];
         $is_precautionary = is_precautionary_phrase($line);
 
-        if (is_compound_ingredient_phrase($line)) {
+        // Only applies within recipes, to lines that reference some other,
+        // unstated compound ingredient (e.g. a recipe calling for "bread
+        // crumbs" without saying what's in them). A product being checked
+        // directly IS that compound ingredient — its own scanned name/text
+        // is fully known, nothing hidden — so it must never flag itself.
+        if ($item_type === 'recipe' && is_compound_ingredient_phrase($line)) {
             $indeterminate_ingredients[] = array('line' => $line, 'source' => $source);
         }
 

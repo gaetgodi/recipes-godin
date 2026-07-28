@@ -168,6 +168,108 @@ function add_allergen_alias($allergen_id, $acting_user_id, $alias_text) {
 }
 
 /**
+ * Rename a custom allergen and replace its alias set (delete-all-then-
+ * reinsert, same pattern as set_profile_allergens()). Only the owner may
+ * edit; seed allergens cannot be modified through this function.
+ */
+function update_custom_allergen($allergen_id, $acting_user_id, $allergen_name, $aliases = array()) {
+    global $wpdb;
+
+    $allergen = get_allergen_definition_by_id($allergen_id);
+    if (!$allergen || $allergen->user_id === null || intval($allergen->user_id) !== intval($acting_user_id)) {
+        return array('error' => 'You do not have permission to edit this allergen');
+    }
+
+    $allergen_name = trim($allergen_name);
+    if (empty($allergen_name)) {
+        return array('error' => 'Allergen name cannot be empty');
+    }
+
+    $existing = $wpdb->get_row($wpdb->prepare(
+        "SELECT allergen_id FROM {$wpdb->prefix}allergen_definitions
+         WHERE user_id = %d AND allergen_name = %s AND allergen_id != %d",
+        $acting_user_id,
+        $allergen_name,
+        $allergen_id
+    ));
+
+    if ($existing) {
+        return array('error' => 'You already have another allergen with this name');
+    }
+
+    $wpdb->update(
+        $wpdb->prefix . 'allergen_definitions',
+        array('allergen_name' => $allergen_name),
+        array('allergen_id' => $allergen_id),
+        array('%s'),
+        array('%d')
+    );
+
+    $wpdb->delete(
+        $wpdb->prefix . 'allergen_aliases',
+        array('allergen_id' => $allergen_id),
+        array('%d')
+    );
+
+    $alias_texts = array_unique(array_filter(array_map('trim', array_merge(
+        array(strtolower($allergen_name)),
+        $aliases
+    ))));
+
+    foreach ($alias_texts as $alias_text) {
+        $wpdb->insert(
+            $wpdb->prefix . 'allergen_aliases',
+            array(
+                'allergen_id' => $allergen_id,
+                'alias_text' => strtolower($alias_text),
+            ),
+            array('%d', '%s')
+        );
+    }
+
+    return array('success' => true);
+}
+
+/**
+ * Delete a custom allergen — removes its aliases and any profile
+ * memberships referencing it, so no profile is left pointing at a
+ * dangling allergen_id. Only the owner may delete; seed allergens cannot
+ * be deleted through this function.
+ */
+function delete_custom_allergen($allergen_id, $acting_user_id) {
+    global $wpdb;
+
+    $allergen = get_allergen_definition_by_id($allergen_id);
+    if (!$allergen || $allergen->user_id === null || intval($allergen->user_id) !== intval($acting_user_id)) {
+        return array('error' => 'You do not have permission to delete this allergen');
+    }
+
+    $wpdb->delete(
+        $wpdb->prefix . 'allergen_profile_items',
+        array('allergen_id' => $allergen_id),
+        array('%d')
+    );
+
+    $wpdb->delete(
+        $wpdb->prefix . 'allergen_aliases',
+        array('allergen_id' => $allergen_id),
+        array('%d')
+    );
+
+    $result = $wpdb->delete(
+        $wpdb->prefix . 'allergen_definitions',
+        array('allergen_id' => $allergen_id),
+        array('%d')
+    );
+
+    if ($result === false) {
+        return array('error' => 'Database error');
+    }
+
+    return array('success' => true);
+}
+
+/**
  * Get all profiles owned by a user.
  */
 function get_user_profiles($user_id) {
