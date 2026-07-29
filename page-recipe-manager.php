@@ -336,6 +336,7 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
         </span>
         <span style="display: flex; gap: 12px; align-items: center;">
             <a href="<?php echo home_url('/allergen-profiles/'); ?>"><?php echo $active_allergen_profile ? 'Change profile' : 'Set up a profile'; ?></a>
+            <a href="<?php echo home_url('/allergen-products/'); ?>">Product Library</a>
             <button onclick="window.location.href='<?php echo home_url('/allergen-checker/'); ?>'" class="action-btn" style="background: #c84a31; color: white;">
                 🩺 Allergen Checker
             </button>

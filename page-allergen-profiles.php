@@ -573,6 +573,7 @@ div.edit-row.active {
 
 <div class="allergen-profile-manager">
     <a href="<?php echo home_url('/recipe-manager/'); ?>" class="back-link">← Back to Recipe Manager</a>
+    <a href="<?php echo home_url('/allergen-products/'); ?>" class="back-link" style="margin-left: 15px;">📦 Manage your Products</a>
 
     <h1>Allergen Profiles</h1>
     <p class="allergen-profile-manager-subtitle">Create and manage allergen profiles used by the Allergen Checker.</p>

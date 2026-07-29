@@ -391,6 +391,7 @@ $products = get_user_products($current_user_id);
 
 <div class="allergen-product-manager">
     <a href="<?php echo home_url('/recipe-manager/'); ?>" class="back-link">← Back to Recipe Manager</a>
+    <a href="<?php echo home_url('/allergen-profiles/'); ?>" class="back-link" style="margin-left: 15px;">🩺 Manage your Profiles</a>
 
     <h1>Allergen Product Library</h1>
     <p class="allergen-product-manager-subtitle">Scan packaged product labels to check them alongside your recipes.</p>
