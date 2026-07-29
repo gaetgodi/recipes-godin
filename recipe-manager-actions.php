@@ -183,7 +183,12 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                             $cat_ids = array_map(function($cat) { return $cat->cat_id; }, $source_cats);
                             set_recipe_categories($new_id, $cat_ids);
                         }
-                        
+
+                        $source_products = get_recipe_products($original_id);
+                        if (!empty($source_products)) {
+                            set_recipe_products($new_id, wp_list_pluck($source_products, 'product_id'));
+                        }
+
                         $redirect_url = home_url('/recipe-editor/?id=' . $new_id . '&copied=1' . $state_query);
                         wp_redirect($redirect_url);
                         exit;
@@ -317,7 +322,12 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                             if (!empty($new_category_ids)) {
                                 set_recipe_categories($new_id, $new_category_ids);
                             }
-                            
+
+                            $source_products = get_recipe_products($original_id);
+                            if (!empty($source_products)) {
+                                set_recipe_products($new_id, wp_list_pluck($source_products, 'product_id'));
+                            }
+
                             $shared_count++;
                         }
                     }
