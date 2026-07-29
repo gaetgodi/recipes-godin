@@ -67,6 +67,28 @@ if (!empty($state_parts)) {
 }
 ?>
 
+<style>
+/* Card header: ID badge, title, category, warning icon, Edit button all
+   sit on one flex row with no wrap — fine at desktop widths, but on a
+   phone the title gets squeezed into a narrow multi-line stack of single
+   words. flex-wrap lets each piece drop to its own line instead. */
+.recipe-view-card-header {
+    flex-wrap: wrap;
+}
+
+/* Ingredients/Method grid: 1fr 1fr leaves only ~122px per column at
+   375px width, wrapping every line into 3-4 lines. Collapse to a single
+   column below the same 430px breakpoint used elsewhere in this codebase
+   (recipe-manager.css, recipe-editor.css). !important is needed here
+   because the base layout is set via inline style="grid-template-columns:
+   1fr 1fr", which otherwise outranks an external stylesheet rule. */
+@media (max-width: 430px) {
+    .recipe-view-content-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>
+
 <div style="max-width: 1200px; margin: 40px auto; padding: 0 20px;">
     
     <div style="text-align: center; margin-bottom: 30px;">
@@ -113,7 +135,7 @@ if (!empty($state_parts)) {
     
     <div style="background: white; border: 2px solid #c84a31; margin-bottom: 40px; border-radius: 8px; overflow: hidden; page-break-inside: avoid;">
         
-        <div style="background: #c84a31; color: white; padding: 20px; display: flex; align-items: center; justify-content: space-between;">
+        <div class="recipe-view-card-header" style="background: #c84a31; color: white; padding: 20px; display: flex; align-items: center; justify-content: space-between;">
             <span style="font-family: 'Courier New', monospace; font-weight: bold; font-size: 14px; background: white; color: #c84a31; padding: 4px 10px; border-radius: 4px;">
                 <?php echo esc_html($recipe_id); ?>
             </span>
@@ -135,7 +157,7 @@ if (!empty($state_parts)) {
             <?php endif; ?>
         </div>
         
-        <div style="padding: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+        <div class="recipe-view-content-grid" style="padding: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
 
             <?php if ($live_allergen_check && $live_allergen_check['flagged']): ?>
             <div style="grid-column: 1 / -1; background: #fff3cd; border: 2px solid #ffc107; border-radius: 6px; padding: 15px 20px;">
