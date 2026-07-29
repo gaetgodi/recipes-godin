@@ -461,6 +461,114 @@ div.edit-row.active {
 .back-link:hover {
     text-decoration: underline;
 }
+
+/* ============================================================
+   MOBILE — max-width: 430px
+   Both profiles tables become stacked cards, one field per line via
+   data-label. Unlike Recipe Manager's table (which can just hide its
+   ID/Category columns), every column here is a required control —
+   most importantly Actions (Set Active, Edit, Share, Delete) — so
+   nothing is dropped, only restacked.
+   ============================================================ */
+@media (max-width: 430px) {
+
+    .allergen-profile-manager {
+        padding: 0 12px;
+        margin: 20px auto;
+    }
+
+    .allergen-profile-manager h1 {
+        font-size: 26px;
+    }
+
+    .add-profile-form input[type="text"],
+    .add-profile-form input[type="number"],
+    .custom-allergen-form input[type="text"],
+    .custom-allergen-form textarea {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 16px; /* prevents iOS auto-zoom on focus */
+    }
+
+    .profiles-table,
+    .profiles-table tbody {
+        display: block;
+    }
+
+    .profiles-table thead {
+        display: none;
+    }
+
+    .profiles-table tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 12px;
+        background: white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .profiles-table td {
+        display: block;
+        padding: 6px 0;
+        border-bottom: none;
+    }
+
+    .profiles-table td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 11px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #999;
+        margin-bottom: 2px;
+    }
+
+    .profiles-table td[data-label="Actions"] {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .profiles-table td[data-label="Actions"] form {
+        display: block !important;
+        width: 100%;
+    }
+
+    .profiles-table td[data-label="Actions"] .btn {
+        width: 100%;
+        box-sizing: border-box;
+        text-align: center;
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+
+    /* Edit/Share expandable rows: the table above is now display:block,
+       so an active toggle needs to resolve to block too — same fix
+       already applied to div.edit-row.active above, extended to <tr>. */
+    .profiles-table tr.edit-row.active {
+        display: block;
+    }
+
+    .edit-form-fields input[type="text"],
+    .edit-form-fields input[type="number"] {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 16px;
+    }
+
+    .profiles-table tr[id^="share-"] form {
+        flex-wrap: wrap;
+    }
+
+    .profiles-table tr[id^="share-"] select {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 16px;
+    }
+}
 </style>
 
 <div class="allergen-profile-manager">
@@ -569,12 +677,12 @@ div.edit-row.active {
                 ?>
                 <!-- View Row -->
                 <tr id="view-<?php echo $profile->profile_id; ?>">
-                    <td>
+                    <td data-label="Profile">
                         <strong><?php echo esc_html($profile->profile_name); ?></strong>
                         <?php if ($is_active): ?><span class="active-badge">Active</span><?php endif; ?>
                     </td>
-                    <td><?php echo $profile->profile_age !== null ? esc_html($profile->profile_age) : '—'; ?></td>
-                    <td>
+                    <td data-label="Age"><?php echo $profile->profile_age !== null ? esc_html($profile->profile_age) : '—'; ?></td>
+                    <td data-label="Allergens">
                         <?php
                         if (!empty($profile_allergens)) {
                             echo esc_html(implode(', ', wp_list_pluck($profile_allergens, 'allergen_name')));
@@ -583,7 +691,7 @@ div.edit-row.active {
                         }
                         ?>
                     </td>
-                    <td>
+                    <td data-label="Actions">
                         <button type="button" onclick="editProfile(<?php echo $profile->profile_id; ?>)" class="btn btn-edit">✏️ Edit</button>
 
                         <?php if (!$is_active): ?>
@@ -726,13 +834,13 @@ div.edit-row.active {
                 $owner = get_userdata($profile->owner_user_id);
             ?>
             <tr>
-                <td>
+                <td data-label="Profile">
                     <strong><?php echo esc_html($profile->profile_name); ?></strong>
                     <?php if ($is_active): ?><span class="active-badge">Active</span><?php endif; ?>
                     <div style="color: #999; font-size: 12px;">Shared by <?php echo esc_html($owner ? $owner->display_name : 'Unknown'); ?></div>
                 </td>
-                <td><?php echo $profile->profile_age !== null ? esc_html($profile->profile_age) : '—'; ?></td>
-                <td>
+                <td data-label="Age"><?php echo $profile->profile_age !== null ? esc_html($profile->profile_age) : '—'; ?></td>
+                <td data-label="Allergens">
                     <?php
                     if (!empty($profile_allergens)) {
                         echo esc_html(implode(', ', wp_list_pluck($profile_allergens, 'allergen_name')));
@@ -741,7 +849,7 @@ div.edit-row.active {
                     }
                     ?>
                 </td>
-                <td>
+                <td data-label="Actions">
                     <?php if (!$is_active): ?>
                     <form method="post">
                         <?php wp_nonce_field('set_active_profile_' . $profile->profile_id); ?>
