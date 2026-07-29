@@ -297,6 +297,96 @@ $products = get_user_products($current_user_id);
 .back-link:hover {
     text-decoration: underline;
 }
+
+/* ============================================================
+   MOBILE — max-width: 430px
+   Same technique as page-allergen-profiles.php: the products table
+   becomes stacked cards, one field per line via data-label. The
+   Actions column (Edit/Delete) is a required control, not optional
+   summary info, so it's restacked rather than hidden.
+   ============================================================ */
+@media (max-width: 430px) {
+
+    .allergen-product-manager {
+        padding: 0 12px;
+        margin: 20px auto;
+    }
+
+    .allergen-product-manager h1 {
+        font-size: 26px;
+    }
+
+    .scan-controls input[type="file"] {
+        width: 100%;
+    }
+
+    .add-product-form input[type="text"],
+    .add-product-form textarea {
+        font-size: 16px; /* prevents iOS auto-zoom on focus */
+    }
+
+    .products-table,
+    .products-table tbody {
+        display: block;
+    }
+
+    .products-table thead {
+        display: none;
+    }
+
+    .products-table tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 12px;
+        background: white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .products-table td {
+        display: block;
+        padding: 6px 0;
+        border-bottom: none;
+        max-width: none;
+    }
+
+    .products-table td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 11px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #999;
+        margin-bottom: 2px;
+    }
+
+    .products-table td[data-label="Actions"] {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .products-table td[data-label="Actions"] form {
+        display: block !important;
+        width: 100%;
+    }
+
+    .products-table td[data-label="Actions"] .btn {
+        width: 100%;
+        box-sizing: border-box;
+        text-align: center;
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+
+    /* Edit row: the table above is now display:block, so an active
+       toggle needs to resolve to block too, not table-row. */
+    .products-table tr.edit-row.active {
+        display: block;
+    }
+}
 </style>
 
 <div class="allergen-product-manager">
@@ -352,9 +442,9 @@ $products = get_user_products($current_user_id);
                 <?php foreach ($products as $product): ?>
                 <!-- View Row -->
                 <tr id="view-<?php echo $product->product_id; ?>">
-                    <td><strong><?php echo esc_html($product->product_name); ?></strong></td>
-                    <td class="ingredient-preview"><?php echo esc_html(wp_trim_words($product->ingredient_text, 20)); ?></td>
-                    <td>
+                    <td data-label="Product"><strong><?php echo esc_html($product->product_name); ?></strong></td>
+                    <td class="ingredient-preview" data-label="Ingredients"><?php echo esc_html(wp_trim_words($product->ingredient_text, 20)); ?></td>
+                    <td data-label="Actions">
                         <button type="button" onclick="editProduct(<?php echo $product->product_id; ?>)" class="btn btn-edit">✏️ Edit</button>
                         <form method="post" style="display: inline;">
                             <?php wp_nonce_field('delete_product_' . $product->product_id); ?>
