@@ -35,6 +35,14 @@ get_header();
 
 require_once(get_stylesheet_directory() . '/collection-permissions.php');
 
+// Allergen Checker v2 Phase E: live per-viewer check, not a stored snapshot —
+// a stored "scanned at" flag would reflect whoever's profile was active at
+// scan time, not the current viewer's, and a missing flag could be misread
+// as "checked and clear" for a viewer it was never actually checked against.
+// Fetched once here (not per-recipe) since it's the same viewer/profile for
+// every recipe on this page.
+$viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_id());
+
 // Carry filter/search state from the incoming URL, for the Back link and Edit links
 $state_parts = array();
 if (!empty($_GET['food_cat'])) {
@@ -97,6 +105,10 @@ if (!empty($state_parts)) {
         $recipe_author_id = get_post_field('post_author', $post_id);
         $can_edit = current_user_can('administrator') ||
                     (current_user_can('edit_posts') && user_can_manage_collection(get_current_user_id(), $recipe_author_id));
+
+        $live_allergen_check = $viewer_active_allergen_profile
+            ? run_allergen_check('recipe', $post_id, $viewer_active_allergen_profile->profile_id)
+            : null;
     ?>
     
     <div style="background: white; border: 2px solid #c84a31; margin-bottom: 40px; border-radius: 8px; overflow: hidden; page-break-inside: avoid;">
@@ -107,6 +119,9 @@ if (!empty($state_parts)) {
             </span>
             <h2 style="flex: 1; margin: 0 20px; font-size: 24px; color: white;">
                 <?php the_title(); ?>
+                <?php if ($live_allergen_check && $live_allergen_check['flagged']): ?>
+                <span title="Flagged against your active allergen profile — see the warning below" style="font-size: 16px; margin-left: 8px;">⚠️</span>
+                <?php endif; ?>
             </h2>
             <span style="font-size: 14px; font-style: italic; margin-right: 15px;">
                 <?php echo esc_html($category); ?>
@@ -121,7 +136,30 @@ if (!empty($state_parts)) {
         </div>
         
         <div style="padding: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
-            
+
+            <?php if ($live_allergen_check && $live_allergen_check['flagged']): ?>
+            <div style="grid-column: 1 / -1; background: #fff3cd; border: 2px solid #ffc107; border-radius: 6px; padding: 15px 20px;">
+                <p style="margin: 0 0 10px 0; font-weight: bold; color: #856404;">
+                    ⚠️ Flagged against your active allergen profile, "<?php echo esc_html($viewer_active_allergen_profile->profile_name); ?>"
+                </p>
+                <p style="margin: 0 0 10px 0; font-size: 13px; color: #856404;">
+                    Checked live, just now, against this profile. This tool never claims a recipe is "safe" — use the Allergen Checker for the full report, including any attached products.
+                </p>
+                <ul style="margin: 0; padding-left: 20px; color: #664d03;">
+                    <?php foreach ($live_allergen_check['allergens'] as $flagged_allergen): ?>
+                    <?php if ($flagged_allergen['tier'] === 'not_detected') continue; ?>
+                    <li>
+                        <strong><?php echo esc_html($flagged_allergen['allergen_name']); ?></strong>
+                        (<?php echo $flagged_allergen['tier'] === 'contains' ? 'Contains' : 'May contain'; ?>)
+                        <?php if (!empty($flagged_allergen['matches'])): ?>
+                        — matched: "<?php echo esc_html($flagged_allergen['matches'][0]['line']); ?>" (<?php echo esc_html($flagged_allergen['matches'][0]['source']); ?>)
+                        <?php endif; ?>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
+
             <div>
                 <h3 style="color: #c84a31; font-size: 20px; margin: 0 0 15px 0; padding-bottom: 10px; border-bottom: 2px solid #c84a31;">
                     Ingredients

@@ -249,7 +249,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
             $post_data['post_author'] = get_current_user_id();
             $saved_id = wp_insert_post($post_data);
         }
-        
+
         if ($saved_id && !is_wp_error($saved_id)) {
             update_post_meta($saved_id, '_recipe_ingredients', $ingredients);
             update_post_meta($saved_id, '_recipe_method', $method);
@@ -762,12 +762,12 @@ document.getElementById('extractBtn').addEventListener('click', function() {
                 if (data.data.extracted_data.method) {
                     document.getElementById('recipe_method').value = data.data.extracted_data.method;
                 }
-                
+
                 document.getElementById('recipe_notes').value = 'RAW EXTRACTION:\n\n' + data.data.raw_response;
-                
+
                 showTranslateButton();
             }
-            
+
             document.getElementById('featuredImageId').value = data.data.attachment_id;
             
         } else {
@@ -853,7 +853,7 @@ function extractFromText() {
                 : '✅ Recipe extracted from text! Check the fields below.';
             
             document.getElementById('recipe_notes').value = 'ORIGINAL TEXT:\n\n' + textContent;
-            
+
             showTranslateButton();
         } else {
             statusDiv.className = 'upload-status error';

@@ -33,6 +33,10 @@ $current_user = wp_get_current_user();
 
 // Include action handlers
 require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
+
+// Allergen Checker v2 Phase E: live per-viewer badge, fetched once here (not
+// per-recipe) since it's the same viewer/profile for the whole list.
+$viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_id());
 ?>
 
 <style>
@@ -640,6 +644,9 @@ require_once(get_stylesheet_directory() . '/recipe-manager-actions.php');
                         <a href="<?php echo esc_url($view_url); ?>" class="recipe-title-link">
                             <?php the_title(); ?>
                         </a>
+                        <?php if ($viewer_active_allergen_profile && run_allergen_check('recipe', $post_id, $viewer_active_allergen_profile->profile_id)['flagged']): ?>
+                        <span title="Flagged against your active allergen profile — open the recipe to see details" style="margin-left: 4px;">⚠️</span>
+                        <?php endif; ?>
                     </td>
                     <td data-label="Category"><?php echo esc_html($category_display); ?></td>
                 </tr>
