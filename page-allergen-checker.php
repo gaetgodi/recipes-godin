@@ -26,7 +26,8 @@ $selected_recipe_ids = array();
 $selected_product_ids = array();
 
 if ($active_profile && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['run_allergen_check'])) {
-    // Manual picker on this page: user checked boxes and clicked "Run Check".
+    // Manual picker on this page (or a single-recipe refine/re-run submission
+    // from the results below): user checked boxes and clicked a Run button.
     check_admin_referer('run_allergen_check');
     $selected_recipe_ids = isset($_POST['selected_recipe_ids']) ? array_map('intval', (array) $_POST['selected_recipe_ids']) : array();
     $selected_product_ids = isset($_POST['selected_product_ids']) ? array_map('intval', (array) $_POST['selected_product_ids']) : array();
@@ -43,7 +44,42 @@ if ($active_profile && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ru
     }
 }
 
-if (!empty($selected_recipe_ids) || !empty($selected_product_ids)) {
+// Allergen Checker v2: fold each selected recipe's attached products into
+// the check automatically.
+$auto_included_product_ids = array();
+$single_recipe_attached_products = array();
+
+if ($active_profile && count($selected_recipe_ids) === 1) {
+    // Exactly one recipe: include all its attached products by default —
+    // preserves today's one-click auto-run from the Recipe Manager shortcut.
+    // The report below then offers a "Re-run with these selections"
+    // checklist (attached_products_submitted marks that as an explicit
+    // refine, distinct from an unset checkbox array meaning "first run").
+    $only_recipe_id = $selected_recipe_ids[0];
+    $single_recipe_attached_products = get_recipe_products($only_recipe_id);
+
+    if (isset($_POST['attached_products_submitted'])) {
+        $auto_included_product_ids = isset($_POST['attached_product_ids']) ? array_map('intval', (array) $_POST['attached_product_ids']) : array();
+    } else {
+        $auto_included_product_ids = wp_list_pluck($single_recipe_attached_products, 'product_id');
+    }
+} elseif ($active_profile && count($selected_recipe_ids) > 1) {
+    // Multiple recipes: every attached product from every selected recipe
+    // is auto-included, with no per-recipe pruning UI — confirmed rule to
+    // avoid a combinatorial "which products, for which recipe" picker.
+    foreach ($selected_recipe_ids as $multi_recipe_id) {
+        foreach (get_recipe_products($multi_recipe_id) as $attached_product) {
+            $auto_included_product_ids[] = $attached_product->product_id;
+        }
+    }
+}
+
+// Merge with whatever was manually checked in the general product picker,
+// deduplicated — a product that's both attached to a recipe and separately
+// hand-picked is reported once, not twice.
+$final_product_ids = array_unique(array_merge($selected_product_ids, $auto_included_product_ids));
+
+if (!empty($selected_recipe_ids) || !empty($final_product_ids)) {
     foreach ($selected_recipe_ids as $recipe_id) {
         $recipe_post = get_post($recipe_id);
         if (!$recipe_post || $recipe_post->post_type !== 'recipe') {
@@ -55,7 +91,7 @@ if (!empty($selected_recipe_ids) || !empty($selected_product_ids)) {
         $results[] = $report;
     }
 
-    foreach ($selected_product_ids as $product_id) {
+    foreach ($final_product_ids as $product_id) {
         $product = get_product_by_id($product_id);
         // Products are fully global for checking — any product, from
         // any user's library, can be selected here. Only editing/deleting
@@ -459,6 +495,26 @@ $pickable_products = $active_profile ? get_all_products() : array();
                 }
                 echo implode(', ', $not_detected_labels);
                 ?>
+            </div>
+            <?php endif; ?>
+
+            <?php if (count($selected_recipe_ids) === 1 && $result['item_type'] === 'recipe' && $result['item_id'] == $selected_recipe_ids[0] && !empty($single_recipe_attached_products)): ?>
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc;">
+                <h4 style="margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; color: #666;">Attached Products Included in This Check</h4>
+                <form method="post">
+                    <?php wp_nonce_field('run_allergen_check'); ?>
+                    <input type="hidden" name="selected_recipe_ids[]" value="<?php echo $result['item_id']; ?>">
+                    <input type="hidden" name="attached_products_submitted" value="1">
+                    <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;">
+                        <?php foreach ($single_recipe_attached_products as $attached_product): ?>
+                        <label style="font-size: 14px;">
+                            <input type="checkbox" name="attached_product_ids[]" value="<?php echo $attached_product->product_id; ?>" <?php checked(in_array($attached_product->product_id, $auto_included_product_ids)); ?>>
+                            <?php echo esc_html($attached_product->product_name); ?>
+                        </label>
+                        <?php endforeach; ?>
+                    </div>
+                    <button type="submit" name="run_allergen_check" class="run-check-btn" style="padding: 8px 20px; font-size: 13px;">Re-run with these selections</button>
+                </form>
             </div>
             <?php endif; ?>
         </div>
