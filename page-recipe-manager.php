@@ -484,7 +484,14 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
             'orderby' => 'title',
             'order' => 'ASC',
         );
-        
+
+        // Owners get to see their own drafts here too (e.g. bulk-imported recipes staged
+        // for review); everyone else — including other visitors browsing this same
+        // collection — only ever sees published recipes. $is_owner already requires both
+        // selected_collection === current_user_id AND publish_posts capability, so a
+        // logged-out visitor (current_user_id 0) can never match into the draft branch.
+        $args['post_status'] = $is_owner ? array('publish', 'draft') : 'publish';
+
         global $wpdb;
         
         $food_recipe_ids = null;
