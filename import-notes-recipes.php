@@ -46,6 +46,7 @@ const DEDUPE_KEYWORD_CAP = 5;
 const CLASSIFY_BATCH_SIZE = 40;
 const API_CALL_DELAY_SECONDS = 1;      // pause between Claude calls to stay clear of rate limits
 const EXTRACTION_MAX_ATTEMPTS = 3;
+const CONSECUTIVE_FAILURE_ABORT_THRESHOLD = 5; // abort rather than grind through hundreds of e.g. credit-exhaustion failures
 
 const DUMP_FILES = [
     '=====RECIPE=====.txt',
@@ -393,8 +394,46 @@ if (!$fresh && file_exists($checkpoint_path)) {
     }
 }
 
+/**
+ * Write the checkpoint atomically and defensively.
+ *
+ * Two failure modes previously made this silently write a 0-byte file, wiping
+ * out everything the checkpoint knew even though the in-memory data (and the
+ * database) were still fine:
+ *
+ *  1. file_put_contents($path, ...) opens the destination in a mode that
+ *     truncates it immediately, before any new bytes are written. If the
+ *     process is interrupted (Ctrl+C, credit-exhaustion abort, OOM-kill,
+ *     anything) at that exact moment — and this function gets called after
+ *     every single block, so the odds of an interrupt landing inside one of
+ *     these windows over a several-hundred-iteration run are not small — the
+ *     file is left truncated with the new content never written. Fixed by
+ *     writing to a temp file and rename()-ing over the real path; rename()
+ *     is atomic on POSIX, so the target file is either the old complete
+ *     version or the new complete version, never a half-written one.
+ *  2. json_encode() returns false (silently — no exception) if any string in
+ *     $checkpoint contains invalid UTF-8 byte sequences, and false coerces to
+ *     an empty string when handed to file_put_contents(). Once one bad
+ *     string enters the checkpoint, every subsequent save call for the rest
+ *     of the run writes empty content. Guarded here with
+ *     JSON_INVALID_UTF8_SUBSTITUTE (so a bad byte becomes U+FFFD instead of
+ *     failing the whole encode) plus an explicit check of the return value —
+ *     if it still somehow fails, the previous good file is left untouched
+ *     rather than clobbered with an empty one.
+ */
 function save_checkpoint($path, &$checkpoint) {
-    file_put_contents($path, json_encode($checkpoint, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    $json = json_encode($checkpoint, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($json === false) {
+        echo "    WARNING: checkpoint json_encode failed (" . json_last_error_msg() . ") — checkpoint file left untouched this cycle.\n";
+        return;
+    }
+
+    $tmp_path = $path . '.tmp';
+    if (file_put_contents($tmp_path, $json) === false) {
+        echo "    WARNING: could not write checkpoint temp file {$tmp_path} — checkpoint file left untouched this cycle.\n";
+        return;
+    }
+    rename($tmp_path, $path); // atomic on POSIX — never leaves $path half-written
 }
 
 function checkpoint_key($block) {
@@ -453,11 +492,16 @@ function classify_recipes_batch(array $items, array $vocab) {
             'x-api-key' => ANTHROPIC_API_KEY,
             'anthropic-version' => '2023-06-01',
         ],
+        // JSON_INVALID_UTF8_SUBSTITUTE: source text can carry stray invalid byte
+        // sequences (title/ingredients/method are user-pasted-into-Apple-Notes
+        // text of unknown provenance); without this flag json_encode() silently
+        // returns false on the first bad byte and 'body' below would collapse to
+        // an empty request instead of erroring loudly.
         'body' => json_encode([
             'model' => ANTHROPIC_MODEL,
             'max_tokens' => 4000,
             'messages' => [['role' => 'user', 'content' => $prompt]],
-        ]),
+        ], JSON_INVALID_UTF8_SUBSTITUTE),
     ]);
 
     if (is_wp_error($response)) {
@@ -525,6 +569,42 @@ function extract_with_retry($body_text) {
     return ['success' => false, 'error' => $last_error];
 }
 
+/**
+ * Durable resume check, independent of the checkpoint file: does a draft from
+ * THIS importer already exist for this exact (title, source file) pair under
+ * this user? Real wp_posts rows survive a broken/lost/corrupt checkpoint —
+ * this is the safety net that actually prevents re-creating a recipe, with
+ * the checkpoint file serving only as a faster first-pass skip on top of it.
+ *
+ * Matches on post_title + post_author + post_type, AND requires the
+ * '_recipe_notes' meta to contain this importer's source-file fingerprint
+ * (the "Apple Notes export — file: X" marker written at creation time below).
+ * That last condition is what keeps this from false-matching an unrelated,
+ * manually-entered recipe that just happens to share a title — a plain
+ * title+author match alone isn't specific enough to safely skip on.
+ */
+function find_existing_import_draft($target_user_id, $title, $source_file) {
+    global $wpdb;
+
+    $like = '%' . $wpdb->esc_like("Apple Notes export — file: {$source_file},") . '%';
+
+    $post_id = $wpdb->get_var($wpdb->prepare(
+        "SELECT p.ID FROM {$wpdb->posts} p
+         INNER JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = '_recipe_notes'
+         WHERE p.post_author = %d
+           AND p.post_type = 'recipe'
+           AND p.post_title = %s
+           AND p.post_status IN ('draft', 'publish')
+           AND m.meta_value LIKE %s
+         LIMIT 1",
+        $target_user_id,
+        $title,
+        $like
+    ));
+
+    return $post_id ? (int) $post_id : null;
+}
+
 $classification_buffer = []; // checkpoint_key => ['post_id','title','folder','ingredients_excerpt','method_excerpt']
 
 function flush_classification_buffer(&$buffer, $target_user_id, $uncategorized_cat_id, $terry_ipad_cat_id, &$vocab, &$original_vocab_lower, &$created_this_run, &$checkpoint, $checkpoint_path) {
@@ -558,7 +638,10 @@ function flush_classification_buffer(&$buffer, $target_user_id, $uncategorized_c
 
 $created_count = 0;
 $skipped_already_imported = 0;
+$recovered_count = 0;
 $failed_count = 0;
+$consecutive_failures = 0;
+$last_failure_error = null;
 
 foreach ($final_candidates as $i => $block) {
     $key = checkpoint_key($block);
@@ -588,18 +671,61 @@ foreach ($final_candidates as $i => $block) {
         continue;
     }
 
+    // Durable resume check — independent of the checkpoint file. Only possible here
+    // for non-blank titles (the ~5 blank-TITLE: blocks don't know their final title
+    // until after extraction; those get the same check further below instead).
+    if ($block['title'] !== '') {
+        $existing_post_id = find_existing_import_draft($target_user_id, $block['title'], $block['file']);
+        if ($existing_post_id !== null) {
+            $recovered_count++;
+            echo "    already exists as draft #{$existing_post_id} (found in wp_posts, not the checkpoint) — skipping re-extraction, re-confirming categories\n";
+            $classification_buffer[$key] = [
+                'post_id' => $existing_post_id,
+                'title' => $block['title'],
+                'folder' => $block['folder'],
+                'ingredients_excerpt' => wp_strip_all_tags(get_post_meta($existing_post_id, '_recipe_ingredients', true)),
+                'method_excerpt' => wp_strip_all_tags(get_post_meta($existing_post_id, '_recipe_method', true)),
+            ];
+            $checkpoint[$key] = [
+                'status' => 'draft_created',
+                'post_id' => $existing_post_id,
+                'title' => $block['title'],
+                'ingredients_excerpt' => wp_strip_all_tags(get_post_meta($existing_post_id, '_recipe_ingredients', true)),
+                'method_excerpt' => wp_strip_all_tags(get_post_meta($existing_post_id, '_recipe_method', true)),
+            ];
+            save_checkpoint($checkpoint_path, $checkpoint);
+            if (count($classification_buffer) >= CLASSIFY_BATCH_SIZE) {
+                flush_classification_buffer($classification_buffer, $target_user_id, $uncategorized_cat_id, $terry_ipad_cat_id, $category_vocab, $original_vocab_lower, $categories_created_this_run, $checkpoint, $checkpoint_path);
+            }
+            continue;
+        }
+    }
+
     $result = extract_with_retry($block['body']);
     sleep(API_CALL_DELAY_SECONDS);
 
     if (!$result['success']) {
         $failed_count++;
+        $consecutive_failures = ($result['error'] === $last_failure_error) ? $consecutive_failures + 1 : 1;
+        $last_failure_error = $result['error'];
         $checkpoint[$key] = ['status' => 'failed', 'title' => $block['title'], 'error' => $result['error']];
         save_checkpoint($checkpoint_path, $checkpoint);
         fwrite($failed_fh, "TITLE: {$display_title}\nFILE: {$block['file']}\nFOLDER: {$block['folder']}\nERROR: {$result['error']}\n" . str_repeat('-', 78) . "\n\n");
         echo "    FAILED: {$result['error']}\n";
+
+        if ($consecutive_failures >= CONSECUTIVE_FAILURE_ABORT_THRESHOLD) {
+            flush_classification_buffer($classification_buffer, $target_user_id, $uncategorized_cat_id, $terry_ipad_cat_id, $category_vocab, $original_vocab_lower, $categories_created_this_run, $checkpoint, $checkpoint_path);
+            fclose($failed_fh);
+            echo "\nABORTING: {$consecutive_failures} consecutive identical extraction failures ({$last_failure_error}).\n";
+            echo "This usually means the Anthropic account is out of credit or the API key/model is misconfigured — grinding\n";
+            echo "through the remaining " . (count($final_candidates) - $num) . " candidate(s) would just fail the same way.\n";
+            echo "Fix the underlying issue, then re-run the same command (without --fresh) to pick up where this left off.\n";
+            exit(1);
+        }
         continue;
     }
 
+    $consecutive_failures = 0;
     $extracted = $result['data'];
     $ingredients_html = format_recipe_content_html($extracted['ingredients'] ?? '', false);
     $method_html = format_recipe_content_html($extracted['method'] ?? '', true);
@@ -620,6 +746,37 @@ foreach ($final_candidates as $i => $block) {
     $final_title = $block['title'] !== '' ? $block['title'] : trim($extracted['title'] ?? '');
     if ($final_title === '') {
         $final_title = 'Untitled Recipe';
+    }
+
+    // Second durable-resume check, for the ~5 blank-TITLE: blocks that couldn't be
+    // checked before extraction (their title wasn't known until now). Rare, and
+    // costs one re-spent extraction call on resume, but still guarantees no
+    // duplicate post gets created for them either.
+    if ($block['title'] === '') {
+        $existing_post_id = find_existing_import_draft($target_user_id, $final_title, $block['file']);
+        if ($existing_post_id !== null) {
+            $recovered_count++;
+            echo "    already exists as draft #{$existing_post_id} (found in wp_posts, not the checkpoint) — reusing it instead of creating a duplicate\n";
+            $classification_buffer[$key] = [
+                'post_id' => $existing_post_id,
+                'title' => $final_title,
+                'folder' => $block['folder'],
+                'ingredients_excerpt' => $extracted['ingredients'] ?? '',
+                'method_excerpt' => $extracted['method'] ?? '',
+            ];
+            $checkpoint[$key] = [
+                'status' => 'draft_created',
+                'post_id' => $existing_post_id,
+                'title' => $final_title,
+                'ingredients_excerpt' => $extracted['ingredients'] ?? '',
+                'method_excerpt' => $extracted['method'] ?? '',
+            ];
+            save_checkpoint($checkpoint_path, $checkpoint);
+            if (count($classification_buffer) >= CLASSIFY_BATCH_SIZE) {
+                flush_classification_buffer($classification_buffer, $target_user_id, $uncategorized_cat_id, $terry_ipad_cat_id, $category_vocab, $original_vocab_lower, $categories_created_this_run, $checkpoint, $checkpoint_path);
+            }
+            continue;
+        }
     }
 
     $notes_raw = "ORIGINAL TEXT:\n\n[Source: Apple Notes export — file: {$block['file']}, folder: \"{$block['folder']}\"]\n\n{$block['body']}";
@@ -679,7 +836,8 @@ fclose($failed_fh);
 
 echo "\n=== IMPORT COMPLETE ===\n";
 echo "Drafts created this run:        {$created_count}\n";
-echo "Already imported (skipped):     {$skipped_already_imported}\n";
+echo "Already imported (checkpoint):  {$skipped_already_imported}\n";
+echo "Recovered from wp_posts:        {$recovered_count} (found via database lookup, not the checkpoint file — re-confirmed their categories)\n";
 echo "Failed extractions:             {$failed_count}" . ($failed_count > 0 ? " (see {$failed_log_path})" : '') . "\n";
 echo 'New categories created:         ' . count(array_unique($categories_created_this_run)) . (empty($categories_created_this_run) ? '' : ' (' . implode(', ', array_unique($categories_created_this_run)) . ')') . "\n";
 echo "All imports are WordPress drafts — review under /recipe-manager/?collection={$target_user_id} before publishing.\n";

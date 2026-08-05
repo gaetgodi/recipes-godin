@@ -215,7 +215,11 @@ If any part is illegible or crossed out, note it with [unclear] rather than gues
             'x-api-key' => $api_key,
             'anthropic-version' => '2023-06-01'
         ),
-        'body' => json_encode($request_body)
+        // JSON_INVALID_UTF8_SUBSTITUTE: without this, a stray invalid UTF-8 byte
+        // anywhere in the request content makes json_encode() silently return
+        // false, which wp_remote_post then sends as an empty request body
+        // instead of erroring loudly.
+        'body' => json_encode($request_body, JSON_INVALID_UTF8_SUBSTITUTE)
     ));
     
     if (is_wp_error($response)) {
@@ -345,7 +349,11 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
             'x-api-key' => $api_key,
             'anthropic-version' => '2023-06-01'
         ),
-        'body' => json_encode($request_body)
+        // JSON_INVALID_UTF8_SUBSTITUTE: without this, a stray invalid UTF-8 byte
+        // anywhere in the request content makes json_encode() silently return
+        // false, which wp_remote_post then sends as an empty request body
+        // instead of erroring loudly.
+        'body' => json_encode($request_body, JSON_INVALID_UTF8_SUBSTITUTE)
     ));
     
     if (is_wp_error($response)) {
@@ -569,7 +577,11 @@ Here is the text:
             'x-api-key' => $api_key,
             'anthropic-version' => '2023-06-01'
         ),
-        'body' => json_encode($request_body)
+        // JSON_INVALID_UTF8_SUBSTITUTE: without this, a stray invalid UTF-8 byte
+        // anywhere in the request content makes json_encode() silently return
+        // false, which wp_remote_post then sends as an empty request body
+        // instead of erroring loudly.
+        'body' => json_encode($request_body, JSON_INVALID_UTF8_SUBSTITUTE)
     ));
 
     if (is_wp_error($response)) {
