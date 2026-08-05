@@ -186,34 +186,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
     $categories = isset($_POST['recipe_categories']) ? array_map('intval', $_POST['recipe_categories']) : array();
     $new_featured_image_id = isset($_POST['featured_image_id']) ? intval($_POST['featured_image_id']) : 0;
     
-    function auto_format_content($content, $is_method = false) {
-        if (empty($content)) return '';
-        if (strpos($content, '<ul>') !== false || strpos($content, '<ol>') !== false) return $content;
-        
-        $lines = array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $content)));
-        if (empty($lines)) return '';
-        if (count($lines) === 1) return '<p>' . esc_html($lines[0]) . '</p>';
-        
-        $list_items = [];
-        foreach ($lines as $line) {
-            $line = preg_replace('/^[\-•*]\s+/', '', $line);
-            
-            if ($is_method) {
-                $line = preg_replace('/^\d+[\.)]\s+/', '', $line);
-            }
-            
-            if (!empty($line)) $list_items[] = '<li>' . esc_html($line) . '</li>';
-        }
-        
-        $tag = $is_method ? 'ol' : 'ul';
-        return empty($list_items) ? '' : '<' . $tag . '>' . implode('', $list_items) . '</' . $tag . '>';
-    }
-    
-    $ingredients = auto_format_content($ingredients, false);
-    $method = auto_format_content($method, true);
-    if (!empty($notes) && strpos($notes, '<p>') === false) {
-        $notes = '<p>' . esc_html($notes) . '</p>';
-    }
+    // Shared with the CLI bulk importer — see format_recipe_content_html() in custom-category-functions.php
+    $ingredients = format_recipe_content_html($ingredients, false);
+    $method = format_recipe_content_html($method, true);
+    $notes = format_recipe_notes_html($notes);
     
     $errors = array();
     if (empty($title)) {

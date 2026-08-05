@@ -446,26 +446,54 @@ add_action('wp_ajax_extract_recipe_from_text', 'handle_text_recipe_extraction');
 function handle_text_recipe_extraction() {
     // Verify nonce
     check_ajax_referer('recipe_text_extract', 'nonce');
-    
+
     // Check permissions
     if (!current_user_can('edit_posts')) {
         wp_send_json_error(array('message' => 'Permission denied'));
     }
-    
+
     $text_content = isset($_POST['text_content']) ? sanitize_textarea_field($_POST['text_content']) : '';
 
     // Get interpretation mode flag (default: false = strict extraction)
     $interpretation_mode = !empty($_POST['interpretation_mode']) && $_POST['interpretation_mode'] === '1';
-    
+
     if (empty($text_content)) {
         wp_send_json_error(array('message' => 'No text provided'));
     }
-    
+
+    $result = extract_recipe_via_claude($text_content, $interpretation_mode);
+
+    if (!$result['success']) {
+        wp_send_json_error(array('message' => $result['error']));
+    }
+
+    wp_send_json_success(array(
+        'extracted_data' => $result['data'],
+        'raw_response' => $result['raw'],
+        'interpretation_mode' => $interpretation_mode
+    ));
+}
+
+/**
+ * Core recipe-from-text extraction via the Claude API.
+ *
+ * Pulled out of handle_text_recipe_extraction() so non-AJAX callers (e.g. the
+ * CLI bulk importer) can reuse the exact same prompt/parsing logic instead of
+ * duplicating it. Requires a fully loaded WordPress environment (wp_remote_post,
+ * ANTHROPIC_API_KEY / ANTHROPIC_MODEL from wp-config.php) but no HTTP request
+ * context — safe to call directly from CLI scripts once wp-load.php is included.
+ *
+ * @param string $text_content        Raw recipe text to extract from.
+ * @param bool   $interpretation_mode Fill gaps with culinary reasoning + translate (true),
+ *                                    or strict extraction in the original language (false, default).
+ * @return array{success:bool,data?:array,raw?:string,error?:string}
+ */
+function extract_recipe_via_claude($text_content, $interpretation_mode = false) {
     // Get API key from wp-config.php
     if (!defined('ANTHROPIC_API_KEY') || ANTHROPIC_API_KEY === 'YOUR_KEY_GOES_HERE_WHEN_READY') {
-        wp_send_json_error(array('message' => 'Anthropic API key not configured'));
+        return array('success' => false, 'error' => 'Anthropic API key not configured');
     }
-    
+
     $api_key = ANTHROPIC_API_KEY;
 
     // Choose prompt based on mode
@@ -520,7 +548,7 @@ Here is the text:
 
 ' . $text_content;
     }
-    
+
     // Prepare the API request to extract recipe from text
     $request_body = array(
         'model' => ANTHROPIC_MODEL,
@@ -532,7 +560,7 @@ Here is the text:
             )
         )
     );
-    
+
     // Make API request
     $response = wp_remote_post('https://api.anthropic.com/v1/messages', array(
         'timeout' => 30,
@@ -543,32 +571,32 @@ Here is the text:
         ),
         'body' => json_encode($request_body)
     ));
-    
+
     if (is_wp_error($response)) {
-        wp_send_json_error(array('message' => 'API request failed: ' . $response->get_error_message()));
+        return array('success' => false, 'error' => 'API request failed: ' . $response->get_error_message());
     }
-    
+
     $body = wp_remote_retrieve_body($response);
     $http_code = wp_remote_retrieve_response_code($response);
     $data = json_decode($body, true);
-    
+
     if ($http_code !== 200) {
         $error_msg = isset($data['error']['message']) ? $data['error']['message'] : 'HTTP ' . $http_code;
-        wp_send_json_error(array('message' => 'API Error: ' . $error_msg));
+        return array('success' => false, 'error' => 'API Error: ' . $error_msg, 'http_code' => $http_code);
     }
-    
+
     if (empty($data['content'][0]['text'])) {
-        wp_send_json_error(array('message' => 'No response from Claude API'));
+        return array('success' => false, 'error' => 'No response from Claude API');
     }
-    
+
     $extracted_text = $data['content'][0]['text'];
-    
+
     // Parse the response using existing parser
     $parsed = parse_recipe_extraction($extracted_text);
-    
-    wp_send_json_success(array(
-        'extracted_data' => $parsed,
-        'raw_response' => $extracted_text,
-        'interpretation_mode' => $interpretation_mode
-    ));
+
+    return array(
+        'success' => true,
+        'data' => $parsed,
+        'raw' => $extracted_text,
+    );
 }
