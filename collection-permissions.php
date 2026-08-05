@@ -417,7 +417,12 @@ function copy_recipe_to_my_collection($recipe_id, $target_user_id) {
     if (!empty($new_category_ids)) {
         set_recipe_categories($new_recipe_id, $new_category_ids);
     }
-    
+
+    $source_products = get_recipe_products($recipe_id);
+    if (!empty($source_products)) {
+        set_recipe_products($new_recipe_id, wp_list_pluck($source_products, 'product_id'));
+    }
+
     $recipe_permanent_id = get_post_meta($new_recipe_id, '_recipe_id', true);
     if (empty($recipe_permanent_id)) {
         $recipe_permanent_id = 'R' . str_pad($new_recipe_id, 4, '0', STR_PAD_LEFT);

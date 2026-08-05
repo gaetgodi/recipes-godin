@@ -35,6 +35,14 @@ get_header();
 
 require_once(get_stylesheet_directory() . '/collection-permissions.php');
 
+// Allergen Checker v2 Phase E: live per-viewer check, not a stored snapshot —
+// a stored "scanned at" flag would reflect whoever's profile was active at
+// scan time, not the current viewer's, and a missing flag could be misread
+// as "checked and clear" for a viewer it was never actually checked against.
+// Fetched once here (not per-recipe) since it's the same viewer/profile for
+// every recipe on this page.
+$viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_id());
+
 // Carry filter/search state from the incoming URL, for the Back link and Edit links
 $state_parts = array();
 if (!empty($_GET['food_cat'])) {
@@ -43,9 +51,10 @@ if (!empty($_GET['food_cat'])) {
 if (!empty($_GET['author_cat'])) {
     $state_parts[] = 'author_cat=' . rawurlencode($_GET['author_cat']);
 }
-if (!empty($_GET['s'])) {
-    $state_parts[] = 's=' . rawurlencode($_GET['s']);
+if (!empty($_GET['rs'])) {
+    $state_parts[] = 'rs=' . rawurlencode($_GET['rs']);
 }
+
 if (!empty($_GET['collection'])) {
     $state_parts[] = 'collection=' . intval($_GET['collection']);
 }
@@ -57,6 +66,28 @@ if (!empty($state_parts)) {
     $back_url .= '?' . implode('&', $state_parts);
 }
 ?>
+
+<style>
+/* Card header: ID badge, title, category, warning icon, Edit button all
+   sit on one flex row with no wrap — fine at desktop widths, but on a
+   phone the title gets squeezed into a narrow multi-line stack of single
+   words. flex-wrap lets each piece drop to its own line instead. */
+.recipe-view-card-header {
+    flex-wrap: wrap;
+}
+
+/* Ingredients/Method grid: 1fr 1fr leaves only ~122px per column at
+   375px width, wrapping every line into 3-4 lines. Collapse to a single
+   column below the same 430px breakpoint used elsewhere in this codebase
+   (recipe-manager.css, recipe-editor.css). !important is needed here
+   because the base layout is set via inline style="grid-template-columns:
+   1fr 1fr", which otherwise outranks an external stylesheet rule. */
+@media (max-width: 430px) {
+    .recipe-view-content-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>
 
 <div style="max-width: 1200px; margin: 40px auto; padding: 0 20px;">
     
@@ -96,16 +127,23 @@ if (!empty($state_parts)) {
         $recipe_author_id = get_post_field('post_author', $post_id);
         $can_edit = current_user_can('administrator') ||
                     (current_user_can('edit_posts') && user_can_manage_collection(get_current_user_id(), $recipe_author_id));
+
+        $live_allergen_check = $viewer_active_allergen_profile
+            ? run_allergen_check('recipe', $post_id, $viewer_active_allergen_profile->profile_id)
+            : null;
     ?>
     
     <div style="background: white; border: 2px solid #c84a31; margin-bottom: 40px; border-radius: 8px; overflow: hidden; page-break-inside: avoid;">
         
-        <div style="background: #c84a31; color: white; padding: 20px; display: flex; align-items: center; justify-content: space-between;">
+        <div class="recipe-view-card-header" style="background: #c84a31; color: white; padding: 20px; display: flex; align-items: center; justify-content: space-between;">
             <span style="font-family: 'Courier New', monospace; font-weight: bold; font-size: 14px; background: white; color: #c84a31; padding: 4px 10px; border-radius: 4px;">
                 <?php echo esc_html($recipe_id); ?>
             </span>
             <h2 style="flex: 1; margin: 0 20px; font-size: 24px; color: white;">
                 <?php the_title(); ?>
+                <?php if ($live_allergen_check && $live_allergen_check['flagged']): ?>
+                <span title="Flagged against your active allergen profile — see the warning below" style="font-size: 16px; margin-left: 8px;">⚠️</span>
+                <?php endif; ?>
             </h2>
             <span style="font-size: 14px; font-style: italic; margin-right: 15px;">
                 <?php echo esc_html($category); ?>
@@ -119,8 +157,31 @@ if (!empty($state_parts)) {
             <?php endif; ?>
         </div>
         
-        <div style="padding: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
-            
+        <div class="recipe-view-content-grid" style="padding: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+
+            <?php if ($live_allergen_check && $live_allergen_check['flagged']): ?>
+            <div style="grid-column: 1 / -1; background: #fff3cd; border: 2px solid #ffc107; border-radius: 6px; padding: 15px 20px;">
+                <p style="margin: 0 0 10px 0; font-weight: bold; color: #856404;">
+                    ⚠️ Flagged against your active allergen profile, "<?php echo esc_html($viewer_active_allergen_profile->profile_name); ?>"
+                </p>
+                <p style="margin: 0 0 10px 0; font-size: 13px; color: #856404;">
+                    Checked live, just now, against this profile. This tool never claims a recipe is "safe" — use the Allergen Checker for the full report, including any attached products.
+                </p>
+                <ul style="margin: 0; padding-left: 20px; color: #664d03;">
+                    <?php foreach ($live_allergen_check['allergens'] as $flagged_allergen): ?>
+                    <?php if ($flagged_allergen['tier'] === 'not_detected') continue; ?>
+                    <li>
+                        <strong><?php echo esc_html($flagged_allergen['allergen_name']); ?></strong>
+                        (<?php echo $flagged_allergen['tier'] === 'contains' ? 'Contains' : 'May contain'; ?>)
+                        <?php if (!empty($flagged_allergen['matches'])): ?>
+                        — matched: "<?php echo esc_html($flagged_allergen['matches'][0]['line']); ?>" (<?php echo esc_html($flagged_allergen['matches'][0]['source']); ?>)
+                        <?php endif; ?>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
+
             <div>
                 <h3 style="color: #c84a31; font-size: 20px; margin: 0 0 15px 0; padding-bottom: 10px; border-bottom: 2px solid #c84a31;">
                     Ingredients
@@ -145,6 +206,19 @@ if (!empty($state_parts)) {
                 <div style="font-style: italic; color: #666;">
                     <?php echo wp_kses_post($notes); ?>
                 </div>
+            </div>
+            <?php endif; ?>
+
+            <?php $attached_products = get_recipe_products($post_id); ?>
+            <?php if (!empty($attached_products)): ?>
+            <div style="grid-column: 1 / -1; margin-top: 20px; padding-top: 20px; border-top: 2px dashed #ddd;">
+                <h3 style="color: #c84a31; font-size: 18px; margin: 0 0 10px 0;">Products</h3>
+                <p style="color: #666; font-size: 13px; margin: 0 0 10px 0;">Specific scanned products attached to this recipe, for accurate allergen checking:</p>
+                <ul style="margin: 0; padding-left: 20px;">
+                    <?php foreach ($attached_products as $product): ?>
+                    <li><?php echo esc_html($product->product_name); ?></li>
+                    <?php endforeach; ?>
+                </ul>
             </div>
             <?php endif; ?>
 

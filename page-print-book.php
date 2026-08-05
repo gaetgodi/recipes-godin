@@ -167,6 +167,16 @@ get_header();
         font-size: 8pt;
         font-style: italic;
     }
+
+    /* Attached products list — off by default, toggled by the on-screen
+       checkbox only; never a saved setting. */
+    .print-products-section {
+        display: none;
+    }
+
+    body.show-attached-products .print-products-section {
+        display: block;
+    }
     
     .no-print {
         text-align: center;
@@ -255,7 +265,11 @@ get_header();
                 <?php echo count($recipe_ids); ?> Recipes | <?php echo date('F j, Y'); ?>
             </p>
         </div>
-        <div style="display: flex; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+            <label style="font-size: 14px; color: #333; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="checkbox" id="includeAttachedProductsCheckbox" onchange="document.body.classList.toggle('show-attached-products', this.checked)">
+                Include attached products list
+            </label>
             <button onclick="window.print()" style="background: #c84a31; color: white; border: none; padding: 10px 25px; font-size: 15px; border-radius: 6px; cursor: pointer; font-weight: bold;">
                 🖨️ Print Book
             </button>
@@ -326,6 +340,13 @@ while ($recipes->have_posts()):
         <?php if (!empty($notes)): ?>
         <div class="recipe-notes">
             <strong>Notes:</strong> <?php echo wp_kses_post($notes); ?>
+        </div>
+        <?php endif; ?>
+
+        <?php $attached_products = get_recipe_products($post_id); ?>
+        <?php if (!empty($attached_products)): ?>
+        <div class="recipe-notes print-products-section">
+            <strong>Products:</strong> <?php echo esc_html(implode(', ', wp_list_pluck($attached_products, 'product_name'))); ?>
         </div>
         <?php endif; ?>
     </div>

@@ -43,7 +43,7 @@ function recipe_actions_state_query_args() {
         $parts[] = 'author_cat=' . rawurlencode($_POST['state_author_cat']);
     }
     if (!empty($_POST['state_search'])) {
-        $parts[] = 's=' . rawurlencode($_POST['state_search']);
+        $parts[] = 'rs=' . rawurlencode($_POST['state_search']);
     }
     return empty($parts) ? '' : '&' . implode('&', $parts);
 }
@@ -113,9 +113,18 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
             
         case 'print':
             set_transient('recipe_print_' . get_current_user_id(), $selected_ids, 300);
-            
+
             $redirect_url = home_url('/recipe-print-page/?ids=' . implode(',', $selected_ids) . $state_query);
-            
+
+            wp_redirect($redirect_url);
+            exit;
+            break;
+
+        case 'check_allergens':
+            set_transient('recipe_check_allergens_' . get_current_user_id(), $selected_ids, 300);
+
+            $redirect_url = home_url('/allergen-checker/?ids=' . implode(',', $selected_ids));
+
             wp_redirect($redirect_url);
             exit;
             break;
@@ -174,7 +183,12 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                             $cat_ids = array_map(function($cat) { return $cat->cat_id; }, $source_cats);
                             set_recipe_categories($new_id, $cat_ids);
                         }
-                        
+
+                        $source_products = get_recipe_products($original_id);
+                        if (!empty($source_products)) {
+                            set_recipe_products($new_id, wp_list_pluck($source_products, 'product_id'));
+                        }
+
                         $redirect_url = home_url('/recipe-editor/?id=' . $new_id . '&copied=1' . $state_query);
                         wp_redirect($redirect_url);
                         exit;
@@ -308,7 +322,12 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                             if (!empty($new_category_ids)) {
                                 set_recipe_categories($new_id, $new_category_ids);
                             }
-                            
+
+                            $source_products = get_recipe_products($original_id);
+                            if (!empty($source_products)) {
+                                set_recipe_products($new_id, wp_list_pluck($source_products, 'product_id'));
+                            }
+
                             $shared_count++;
                         }
                     }
