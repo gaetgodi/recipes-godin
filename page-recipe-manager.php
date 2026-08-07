@@ -995,6 +995,7 @@ function clearSearch() {
 }
 
 updateSelectedCount();
+searchRecipes();
 </script>
 
 <?php get_footer(); ?>
