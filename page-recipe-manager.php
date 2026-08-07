@@ -217,13 +217,14 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
     // --- Persisted filter/search state, used to build every outbound link below ---
     $food_cat_ids = !empty($_GET['food_cat']) ? array_map('intval', explode(',', $_GET['food_cat'])) : array();
     $author_cat_ids = !empty($_GET['author_cat']) ? array_map('intval', explode(',', $_GET['author_cat'])) : array();
-    $search_term = isset($_GET['rs']) ? sanitize_text_field($_GET['rs']) : '';   
+    $search_term = isset($_GET['rs']) ? sanitize_text_field($_GET['rs']) : '';
+    $sort_order = (isset($_GET['sort']) && strtolower($_GET['sort']) === 'desc') ? 'desc' : 'asc';
     /**
      * Build a query-string fragment carrying the current filter/search state,
      * for appending to any link that should preserve it (view, edit, etc.)
      * Returns a string starting with '&' or '' if there's nothing to carry.
      */
-    function recipe_manager_state_query_args($food_cat_ids, $author_cat_ids, $search_term, $collection_id, $current_user_id) {
+    function recipe_manager_state_query_args($food_cat_ids, $author_cat_ids, $search_term, $collection_id, $current_user_id, $sort_order = 'asc') {
         $parts = array();
         if (!empty($food_cat_ids)) {
             $parts[] = 'food_cat=' . implode(',', $food_cat_ids);
@@ -237,10 +238,13 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
         if ($collection_id != $current_user_id) {
             $parts[] = 'collection=' . intval($collection_id);
         }
+        if ($sort_order === 'desc') {
+            $parts[] = 'sort=desc';
+        }
         return empty($parts) ? '' : '&' . implode('&', $parts);
     }
-    
-    $state_query = recipe_manager_state_query_args($food_cat_ids, $author_cat_ids, $search_term, $selected_collection, $current_user_id);
+
+    $state_query = recipe_manager_state_query_args($food_cat_ids, $author_cat_ids, $search_term, $selected_collection, $current_user_id, $sort_order);
     // Version without leading '&', for building a fresh '?...' URL from scratch
     $state_query_no_amp = ltrim($state_query, '&');
     
@@ -434,8 +438,16 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
                     </div>
                 </div>
             </div>
+
+            <div class="filter-group-pair">
+                <label for="sortOrderSelect" style="font-weight: 600;">Sort by Name:</label>
+                <select id="sortOrderSelect" onchange="applySortOrder(this.value)" style="padding: 8px 15px; font-size: 15px; border: 2px solid #ddd; border-radius: 4px; min-width: 200px;">
+                    <option value="asc" <?php selected($sort_order, 'asc'); ?>>A → Z</option>
+                    <option value="desc" <?php selected($sort_order, 'desc'); ?>>Z → A</option>
+                </select>
+            </div>
         </div>
-        
+
         <!-- Active Filter Pills -->
         <?php if (!empty($food_cat_ids) || !empty($author_cat_ids)): ?>
         <div class="rm-filter-pills">
@@ -444,7 +456,7 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
             foreach ($food_categories as $cat) {
                 if (in_array($cat->cat_id, $food_cat_ids)) {
                     $remaining = array_diff($food_cat_ids, array($cat->cat_id));
-                    $remove_url = home_url('/recipe-manager/?' . ltrim(recipe_manager_state_query_args($remaining, $author_cat_ids, $search_term, $selected_collection, $current_user_id), '&'));
+                    $remove_url = home_url('/recipe-manager/?' . ltrim(recipe_manager_state_query_args($remaining, $author_cat_ids, $search_term, $selected_collection, $current_user_id, $sort_order), '&'));
                     echo '<span class="pill pill-food">';
                     echo esc_html($cat->cat_name);
                     echo '<a href="' . esc_url($remove_url) . '" title="Remove filter">&times;</a>';
@@ -454,7 +466,7 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
             foreach ($author_categories as $cat) {
                 if (in_array($cat->cat_id, $author_cat_ids)) {
                     $remaining = array_diff($author_cat_ids, array($cat->cat_id));
-                    $remove_url = home_url('/recipe-manager/?' . ltrim(recipe_manager_state_query_args($food_cat_ids, $remaining, $search_term, $selected_collection, $current_user_id), '&'));
+                    $remove_url = home_url('/recipe-manager/?' . ltrim(recipe_manager_state_query_args($food_cat_ids, $remaining, $search_term, $selected_collection, $current_user_id, $sort_order), '&'));
                     echo '<span class="pill pill-author">';
                     echo esc_html($cat->cat_name);
                     echo '<a href="' . esc_url($remove_url) . '" title="Remove filter">&times;</a>';
@@ -482,7 +494,7 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
             'posts_per_page' => -1,
             'author' => $selected_collection,
             'orderby' => 'title',
-            'order' => 'ASC',
+            'order' => strtoupper($sort_order),
         );
 
         // Owners get to see their own drafts here too (e.g. bulk-imported recipes staged
@@ -527,7 +539,9 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
         if ($matching_recipe_ids !== null) {
             if (!empty($matching_recipe_ids)) {
                 $args['post__in'] = array_values($matching_recipe_ids);
-                $args['orderby'] = 'post__in';
+                // Keep sorting by title even when restricted to a category-filtered
+                // set of IDs — 'orderby' is left as 'title' from $args above, since
+                // post__in's ID order carries no meaningful sequence to preserve here.
             } else {
                 $args['post__in'] = array(0);
             }
@@ -613,7 +627,16 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
     <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
 </th>
 <th>ID</th>
-<th>Recipe Title</th>
+<th>
+    <?php
+    $toggle_sort = ($sort_order === 'desc') ? 'asc' : 'desc';
+    $sort_toggle_url = home_url('/recipe-manager/?' . ltrim(recipe_manager_state_query_args($food_cat_ids, $author_cat_ids, $search_term, $selected_collection, $current_user_id, $toggle_sort), '&'));
+    $sort_arrow = ($sort_order === 'desc') ? ' ▼' : ' ▲';
+    ?>
+    <a href="<?php echo esc_url($sort_toggle_url); ?>" style="color: inherit; text-decoration: none;" title="Sort by recipe title">
+        Recipe Title<?php echo $sort_arrow; ?>
+    </a>
+</th>
 <th>Category</th>
                 </tr>
             </thead>
@@ -728,6 +751,7 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
         <input type="hidden" name="state_food_cat" value="<?php echo esc_attr(implode(',', $food_cat_ids)); ?>">
         <input type="hidden" name="state_author_cat" value="<?php echo esc_attr(implode(',', $author_cat_ids)); ?>">
         <input type="hidden" name="state_search" value="<?php echo esc_attr($search_term); ?>">
+        <input type="hidden" name="state_sort" value="<?php echo esc_attr($sort_order); ?>">
     </form>
 </div>
 
@@ -897,7 +921,29 @@ function applyFiltersInstantly() {
     <?php if ($selected_collection != $current_user_id): ?>
     params.set('collection', '<?php echo intval($selected_collection); ?>');
     <?php endif; ?>
-    
+
+    <?php if ($sort_order === 'desc'): ?>
+    params.set('sort', 'desc');
+    <?php endif; ?>
+
+    window.location.href = '<?php echo home_url('/recipe-manager/'); ?>?' + params.toString();
+}
+
+function applySortOrder(order) {
+    const { foodIds, authorIds } = getCurrentSelections();
+    const params = new URLSearchParams();
+    if (foodIds.length > 0) params.set('food_cat', foodIds.join(','));
+    if (authorIds.length > 0) params.set('author_cat', authorIds.join(','));
+
+    const currentSearch = document.getElementById('recipeSearch').value;
+    if (currentSearch) params.set('rs', currentSearch);
+
+    <?php if ($selected_collection != $current_user_id): ?>
+    params.set('collection', '<?php echo intval($selected_collection); ?>');
+    <?php endif; ?>
+
+    if (order === 'desc') params.set('sort', 'desc');
+
     window.location.href = '<?php echo home_url('/recipe-manager/'); ?>?' + params.toString();
 }
 

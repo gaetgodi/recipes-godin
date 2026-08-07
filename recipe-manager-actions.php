@@ -45,6 +45,9 @@ function recipe_actions_state_query_args() {
     if (!empty($_POST['state_search'])) {
         $parts[] = 'rs=' . rawurlencode($_POST['state_search']);
     }
+    if (!empty($_POST['state_sort']) && strtolower($_POST['state_sort']) === 'desc') {
+        $parts[] = 'sort=desc';
+    }
     return empty($parts) ? '' : '&' . implode('&', $parts);
 }
 
