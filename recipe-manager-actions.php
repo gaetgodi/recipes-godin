@@ -427,6 +427,11 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
         'marginBottom' => 1440,
     ));
 
+    // Page numbers - centered {PAGE} field in the footer, applies to every
+    // page of this section (title page, TOC page, and every recipe page).
+    $footer = $section->addFooter();
+    $footer->addPreserveText('{PAGE}', array('name' => $body_font, 'size' => 10), array('alignment' => 'center'));
+
     // --- Title page ---
     $requesting_user = get_userdata($requesting_user_id);
     $requesting_user_name = $requesting_user ? $requesting_user->display_name : '';
@@ -455,7 +460,10 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
         array('bold' => true, 'size' => 16, 'name' => $body_font),
         array('alignment' => 'center', 'spaceAfter' => 200)
     );
-    // minDepth/maxDepth of 1 restricts the TOC to Heading 1 entries (recipe titles).
+    // minDepth/maxDepth of 1 restricts the TOC to Heading 1 entries (recipe
+    // titles). tocStyle is left null so PHPWord's defaults apply, which
+    // already include a page number (PAGEREF) after each entry - no extra
+    // flag needed for that.
     $section->addTOC(array('size' => 12, 'name' => $body_font), null, 1, 1);
 
     // --- One recipe per page ---
