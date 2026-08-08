@@ -429,8 +429,17 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
 
     // Page numbers - centered {PAGE} field in the footer, applies to every
     // page of this section (title page, TOC page, and every recipe page).
+    // shading is explicitly cleared so the field has no grey background.
     $footer = $section->addFooter();
-    $footer->addPreserveText('{PAGE}', array('name' => $body_font, 'size' => 10), array('alignment' => 'center'));
+    $footer->addPreserveText(
+        '{PAGE}',
+        array(
+            'name' => $body_font,
+            'size' => 10,
+            'shading' => array('fill' => 'FFFFFF', 'pattern' => 'clear'),
+        ),
+        array('alignment' => 'center')
+    );
 
     // --- Title page ---
     $requesting_user = get_userdata($requesting_user_id);
@@ -461,10 +470,15 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
         array('alignment' => 'center', 'spaceAfter' => 200)
     );
     // minDepth/maxDepth of 1 restricts the TOC to Heading 1 entries (recipe
-    // titles). tocStyle is left null so PHPWord's defaults apply, which
-    // already include a page number (PAGEREF) after each entry - no extra
-    // flag needed for that.
+    // titles). The PAGEREF fields PHPWord writes into the TOC are not
+    // evaluated until Word itself updates them, so they show blank/no page
+    // number until the user does that - hence the note below.
     $section->addTOC(array('size' => 12, 'name' => $body_font), null, 1, 1);
+    $section->addText(
+        'Right-click the Table of Contents and select Update Field to populate page numbers.',
+        array('italic' => true, 'size' => 10, 'name' => $body_font),
+        array('alignment' => 'center', 'spaceBefore' => 200)
+    );
 
     // --- One recipe per page ---
     while ($recipes_query->have_posts()) {
