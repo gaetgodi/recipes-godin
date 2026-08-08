@@ -429,15 +429,12 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
 
     // Page numbers - centered {PAGE} field in the footer, applies to every
     // page of this section (title page, TOC page, and every recipe page).
-    // shading is explicitly cleared so the field has no grey background.
+    // No shading/bgColor here - an explicit shading array previously
+    // corrupted the docx output.
     $footer = $section->addFooter();
     $footer->addPreserveText(
         '{PAGE}',
-        array(
-            'name' => $body_font,
-            'size' => 10,
-            'shading' => array('fill' => 'FFFFFF', 'pattern' => 'clear'),
-        ),
+        array('name' => $body_font, 'size' => 10),
         array('alignment' => 'center')
     );
 
