@@ -553,10 +553,12 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
 
 /**
  * Decode HTML entities (e.g. &nbsp;, &amp;) into their plain UTF-8
- * equivalents, and normalize the resulting non-breaking space (U+00A0) into
- * a regular space. wp_strip_all_tags() only removes tags - it does not
- * decode entities - so without this, raw entities like &nbsp; leak into the
- * PHPWord/docx XML as literal text and corrupt the generated file.
+ * equivalents, normalize the resulting non-breaking space (U+00A0) into a
+ * regular space, then re-escape any bare & left over (e.g. from "Salt &
+ * Pepper" typed directly into a recipe) back into &amp; so it is valid XML.
+ * wp_strip_all_tags() only removes tags - it does not decode entities - so
+ * without this, raw &nbsp; entities and bare & characters both leak into
+ * the PHPWord/docx XML as literal text and corrupt the generated file.
  *
  * @param string $text
  * @return string
@@ -564,6 +566,8 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
 function recipe_export_clean_text($text) {
     $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $text = str_replace("\xC2\xA0", ' ', $text); // U+00A0 non-breaking space, UTF-8 bytes
+    // Escape bare & (not already part of a valid XML/HTML entity like &amp; or &#39;).
+    $text = preg_replace('/&(?![a-zA-Z0-9#]+;)/', '&amp;', $text);
     return $text;
 }
 
