@@ -564,6 +564,9 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
  * @return string
  */
 function recipe_export_clean_text($text) {
+    // Strip any HTML tags first (e.g. a stray <div>) so they can't survive
+    // into the decode/escape steps below and leak into the docx XML.
+    $text = strip_tags($text);
     // Decode repeatedly to unwind double-encoded entities (e.g. &amp;frac12;)
     // and to catch everything ENT_HTML5 knows about (e.g. &frac12;).
     for ($i = 0; $i < 3; $i++) {
