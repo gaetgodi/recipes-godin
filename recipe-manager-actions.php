@@ -564,10 +564,17 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
  * @return string
  */
 function recipe_export_clean_text($text) {
-    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    // Decode repeatedly to unwind double-encoded entities (e.g. &amp;frac12;)
+    // and to catch everything ENT_HTML5 knows about (e.g. &frac12;).
+    for ($i = 0; $i < 3; $i++) {
+        $decoded = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        if ($decoded === $text) {
+            break;
+        }
+        $text = $decoded;
+    }
     $text = str_replace("\xC2\xA0", ' ', $text); // U+00A0 non-breaking space, UTF-8 bytes
-    // Escape bare & (not already part of a valid XML/HTML entity like &amp; or &#39;).
-    $text = preg_replace('/&(?![a-zA-Z0-9#]+;)/', '&amp;', $text);
+    // Do not re-escape & here - PHPWord's addText() does its own XML escaping.
     return $text;
 }
 
