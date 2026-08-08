@@ -585,6 +585,12 @@ function recipe_export_clean_text($text) {
     // HTML entities to their UTF-8 characters, so any & remaining is a literal
     // ampersand from recipe content (e.g. "Salt & Pepper").
     $text = str_replace('&', '&amp;', $text);
+    // Escape bare < and > for XML safety. Must come after the second
+    // strip_tags() (which needs real < > to find tags) and after the
+    // ampersand escaping above (otherwise the & in &lt;/&gt; would get
+    // double-escaped to &amp;lt;/&amp;gt;).
+    $text = str_replace('<', '&lt;', $text);
+    $text = str_replace('>', '&gt;', $text);
     return $text;
 }
 
