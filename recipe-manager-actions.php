@@ -574,7 +574,10 @@ function recipe_export_clean_text($text) {
         $text = $decoded;
     }
     $text = str_replace("\xC2\xA0", ' ', $text); // U+00A0 non-breaking space, UTF-8 bytes
-    // Do not re-escape & here - PHPWord's addText() does its own XML escaping.
+    // Safe to re-escape here: the decode loop above has already resolved all
+    // HTML entities to their UTF-8 characters, so any & remaining is a literal
+    // ampersand from recipe content (e.g. "Salt & Pepper").
+    $text = str_replace('&', '&amp;', $text);
     return $text;
 }
 
