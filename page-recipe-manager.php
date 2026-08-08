@@ -276,10 +276,11 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
             </label>
             <select id="collection-selector" onchange="switchCollection()" style="padding: 8px 15px; font-size: 15px; border: 2px solid #2271b1; border-radius: 4px; min-width: 250px;">
                 <?php foreach ($accessible_collections as $collection): ?>
-                    <option value="<?php echo $collection['owner_id']; ?>" 
+                    <?php $recipe_count = count_user_posts($collection['owner_id'], 'recipe'); ?>
+                    <option value="<?php echo $collection['owner_id']; ?>"
                             <?php selected($selected_collection, $collection['owner_id']); ?>>
-                        <?php 
-                        echo esc_html($collection['owner_name']) . "'s Recipes";
+                        <?php
+                        echo esc_html($collection['owner_name']) . "'s Recipes ({$recipe_count})";
                         if ($collection['owner_id'] == $current_user_id) {
                             echo " (Yours)";
                         } else {
