@@ -414,8 +414,8 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
     $phpWord->setDefaultFontName($body_font);
     $phpWord->setDefaultFontSize(12);
 
-    // Heading 1 = recipe titles (also the TOC entries). Heading 2 = the
-    // Ingredients/Method/Notes sub-headings within each recipe.
+    // Heading 1 = recipe titles and the "Table of Contents" heading itself.
+    // Heading 2 = the Ingredients/Method/Notes sub-headings within each recipe.
     $phpWord->addTitleStyle(1, array('bold' => true, 'size' => 16, 'name' => $body_font));
     $phpWord->addTitleStyle(2, array('bold' => true, 'size' => 13, 'name' => $body_font));
 
@@ -459,18 +459,23 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
     );
 
     // --- Table of contents (page 2) ---
-    // Not addTitle() - "Table of Contents" itself should not become a TOC entry.
+    // Manual, bookmark-based TOC: built from the same ordered post list the
+    // content loop below uses, so entry order always matches page order.
+    // This is a plain heading, not linked to anything itself - it must not
+    // be confused with the addLink() entries beneath it.
     $section->addPageBreak();
-    $section->addText(
-        'Table of Contents',
-        array('bold' => true, 'size' => 16, 'name' => $body_font),
-        array('alignment' => 'center', 'spaceAfter' => 200)
-    );
-    // minDepth/maxDepth of 1 restricts the TOC to Heading 1 entries (recipe
-    // titles). The PAGEREF fields PHPWord writes into the TOC are not
-    // evaluated until Word updates them - setUpdateFields(true) below makes
-    // Word do that automatically on open, so no user action is needed.
-    $section->addTOC(array('size' => 12, 'name' => $body_font), null, 1, 1);
+    $section->addTitle('Table of Contents', 1);
+
+    foreach ($recipes_query->posts as $toc_post) {
+        $toc_title = recipe_export_clean_text(get_the_title($toc_post->ID));
+        $section->addLink(
+            'recipe_' . $toc_post->ID,
+            $toc_title,
+            array('name' => $body_font, 'size' => 12, 'color' => '0000FF', 'underline' => 'single'),
+            array('spaceAfter' => 100),
+            true
+        );
+    }
 
     // --- One recipe per page ---
     while ($recipes_query->have_posts()) {
@@ -479,6 +484,7 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
 
         $section->addPageBreak();
 
+        $section->addBookmark('recipe_' . $post_id);
         $section->addTitle(recipe_export_clean_text(get_the_title($post_id)), 1);
 
         $recipe_cats = get_recipe_categories($post_id);
@@ -518,10 +524,6 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
     wp_reset_postdata();
 
     $tmp_filename = '/tmp/recipe-export-' . time() . '-' . wp_generate_password(8, false, false) . '.docx';
-
-    // Force Word to auto-update fields (including the TOC page numbers) when
-    // the document is opened, so users don't have to manually update them.
-    $phpWord->getSettings()->setUpdateFields(true);
 
     $writer = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'Word2007');
     $writer->save($tmp_filename);
