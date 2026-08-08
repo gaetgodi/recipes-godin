@@ -155,8 +155,11 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
             if ($skipped_count > 0) {
                 $redirect_url .= '&bulk_skipped=' . $skipped_count;
             }
-            $redirect_url .= $state_query;
-            
+            // Note: $state_query is deliberately NOT appended here. It carries
+            // food_cat/author_cat filter IDs from the source collection, which
+            // are meaningless (and potentially wrong) once the redirect lands
+            // in the destination collection (the current user's own).
+
             wp_redirect($redirect_url);
             exit;
             break;
