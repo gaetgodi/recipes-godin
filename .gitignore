@@ -7,3 +7,5 @@ Thumbs.db
 .vscode/
 node_modules/
 *.sql
+vendor/
+composer.lock

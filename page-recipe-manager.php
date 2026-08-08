@@ -587,6 +587,11 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
                 🖨️ Print Book
             </button>
 
+            <button type="submit" name="bulk_action" value="export_docx" class="action-btn" style="background: #17a2b8; color: white;" id="docxBtnTop" disabled
+                    title="Download selected recipes as a Word document">
+                Download as Word
+            </button>
+
             <button type="submit" name="bulk_action" value="check_allergens" class="action-btn" style="background: #c84a31; color: white;" id="checkAllergensBtnTop" disabled
                     title="Check selected recipes against your active allergen profile">
                 🩺 Check Allergens
@@ -704,6 +709,11 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
             
             <button type="submit" name="bulk_action" value="print" class="action-btn btn-print" id="printBtn" disabled>
                 🖨️ Print Book
+            </button>
+
+            <button type="submit" name="bulk_action" value="export_docx" class="action-btn" style="background: #17a2b8; color: white;" id="docxBtn" disabled
+                    title="Download selected recipes as a Word document">
+                Download as Word
             </button>
 
             <button type="submit" name="bulk_action" value="check_allergens" class="action-btn" style="background: #c84a31; color: white;" id="checkAllergensBtn" disabled

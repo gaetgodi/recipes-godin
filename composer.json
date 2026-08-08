@@ -1,0 +1,8 @@
+{
+    "name": "godin/divi-recipe-child",
+    "description": "Divi Recipe Child theme dependencies (recipes.godin.com)",
+    "type": "project",
+    "require": {
+        "phpoffice/phpword": "^1.2"
+    }
+}

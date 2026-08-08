@@ -123,6 +123,12 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
             exit;
             break;
 
+        case 'export_docx':
+            // Streams a .docx file directly rather than redirecting - see
+            // recipe_manager_export_docx() below.
+            recipe_manager_export_docx($selected_ids, get_current_user_id());
+            break;
+
         case 'check_allergens':
             set_transient('recipe_check_allergens_' . get_current_user_id(), $selected_ids, 300);
 
@@ -349,4 +355,224 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
             }
             break;
     }
+}
+
+/**
+ * Build a .docx export of the given recipes with PHPWord and stream it to
+ * the browser as a download, then delete the temp file.
+ *
+ * Streams the file directly instead of redirecting (unlike the view/print
+ * bulk actions above) because the response body IS the download - there is
+ * no HTML page to render afterward. page-recipe-manager.php has already run
+ * get_header() by the time this file is required, so any buffered output is
+ * discarded before the binary headers/body go out.
+ *
+ * No per-recipe permission check beyond selection, matching the 'view' and
+ * 'print' bulk actions - the recipe list a user can select from is already
+ * scoped to collections they can view.
+ *
+ * @param int[] $recipe_ids
+ * @param int   $requesting_user_id  The user downloading the file (used for
+ *                                    the title page byline), not the recipes'
+ *                                    author(s).
+ */
+function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
+    if (empty($recipe_ids)) {
+        return;
+    }
+
+    $autoload_path = get_stylesheet_directory() . '/vendor/autoload.php';
+
+    if (!file_exists($autoload_path)) {
+        echo '<div style="background: #f8d7da; padding: 15px; margin: 20px; border: 1px solid #f5c6cb; color: #721c24;">Word export is not available: PHPWord is not installed (run composer install).</div>';
+        return;
+    }
+
+    require_once($autoload_path);
+
+    if (!class_exists('PhpOffice\\PhpWord\\PhpWord')) {
+        echo '<div style="background: #f8d7da; padding: 15px; margin: 20px; border: 1px solid #f5c6cb; color: #721c24;">Word export is not available: PHPWord library not found.</div>';
+        return;
+    }
+
+    $recipes_query = new WP_Query(array(
+        'post_type' => 'recipe',
+        'posts_per_page' => -1,
+        'post__in' => $recipe_ids,
+        'orderby' => 'post__in',
+    ));
+
+    if (!$recipes_query->have_posts()) {
+        wp_reset_postdata();
+        echo '<div style="background: #f8d7da; padding: 15px; margin: 20px; border: 1px solid #f5c6cb; color: #721c24;">No recipes found to export.</div>';
+        return;
+    }
+
+    $body_font = 'Times New Roman';
+
+    $phpWord = new \PhpOffice\PhpWord\PhpWord();
+    $phpWord->setDefaultFontName($body_font);
+    $phpWord->setDefaultFontSize(12);
+
+    // Heading 1 = recipe titles (also the TOC entries). Heading 2 = the
+    // Ingredients/Method/Notes sub-headings within each recipe.
+    $phpWord->addTitleStyle(1, array('bold' => true, 'size' => 16, 'name' => $body_font));
+    $phpWord->addTitleStyle(2, array('bold' => true, 'size' => 13, 'name' => $body_font));
+
+    $section = $phpWord->addSection(array(
+        'paperSize' => 'Letter',
+        'marginLeft' => 1440,   // 1 inch, in twips (1440 twips = 1 inch)
+        'marginRight' => 1440,
+        'marginTop' => 1440,
+        'marginBottom' => 1440,
+    ));
+
+    // --- Title page ---
+    $requesting_user = get_userdata($requesting_user_id);
+    $requesting_user_name = $requesting_user ? $requesting_user->display_name : '';
+
+    $section->addText(
+        'Selected Recipes',
+        array('bold' => true, 'size' => 28, 'name' => $body_font),
+        array('alignment' => 'center', 'spaceAfter' => 200)
+    );
+    $section->addText(
+        $requesting_user_name,
+        array('size' => 14, 'name' => $body_font),
+        array('alignment' => 'center', 'spaceAfter' => 100)
+    );
+    $section->addText(
+        date('F j, Y'),
+        array('size' => 12, 'name' => $body_font),
+        array('alignment' => 'center')
+    );
+
+    // --- Table of contents (page 2) ---
+    // Not addTitle() - "Table of Contents" itself should not become a TOC entry.
+    $section->addPageBreak();
+    $section->addText(
+        'Table of Contents',
+        array('bold' => true, 'size' => 16, 'name' => $body_font),
+        array('alignment' => 'center', 'spaceAfter' => 200)
+    );
+    // minDepth/maxDepth of 1 restricts the TOC to Heading 1 entries (recipe titles).
+    $section->addTOC(array('size' => 12, 'name' => $body_font), null, 1, 1);
+
+    // --- One recipe per page ---
+    while ($recipes_query->have_posts()) {
+        $recipes_query->the_post();
+        $post_id = get_the_ID();
+
+        $section->addPageBreak();
+
+        $section->addTitle(get_the_title($post_id), 1);
+
+        $recipe_cats = get_recipe_categories($post_id);
+        if (!empty($recipe_cats)) {
+            $category_names = wp_list_pluck($recipe_cats, 'cat_name');
+            $section->addText(
+                implode(', ', $category_names),
+                array('italic' => true, 'name' => $body_font, 'size' => 12),
+                array('spaceAfter' => 200)
+            );
+        }
+
+        $ingredients_html = get_post_meta($post_id, '_recipe_ingredients', true);
+        $method_html = get_post_meta($post_id, '_recipe_method', true);
+        $notes_html = get_post_meta($post_id, '_recipe_notes', true);
+
+        $section->addTitle('Ingredients', 2);
+        foreach (recipe_export_html_to_lines($ingredients_html) as $line) {
+            $section->addText('- ' . $line, array('name' => $body_font, 'size' => 12));
+        }
+
+        $section->addTitle('Method', 2);
+        $step_number = 1;
+        foreach (recipe_export_html_to_lines($method_html) as $line) {
+            $section->addText($step_number . '. ' . $line, array('name' => $body_font, 'size' => 12));
+            $step_number++;
+        }
+
+        if (trim(wp_strip_all_tags($notes_html)) !== '') {
+            $section->addTitle('Notes', 2);
+            foreach (recipe_export_html_to_lines($notes_html) as $line) {
+                $section->addText($line, array('name' => $body_font, 'size' => 12));
+            }
+        }
+    }
+
+    wp_reset_postdata();
+
+    $tmp_filename = '/tmp/recipe-export-' . time() . '-' . wp_generate_password(8, false, false) . '.docx';
+
+    $writer = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'Word2007');
+    $writer->save($tmp_filename);
+
+    // page-recipe-manager.php already called get_header() before this file
+    // was required, so discard whatever HTML is sitting in the output
+    // buffer(s) - the response body must be pure binary docx content.
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+
+    $download_name = 'Recipe-Collection-' . date('Y-m-d') . '.docx';
+
+    header('Content-Description: File Transfer');
+    header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    header('Content-Disposition: attachment; filename="' . $download_name . '"');
+    header('Content-Transfer-Encoding: binary');
+    header('Expires: 0');
+    header('Cache-Control: must-revalidate');
+    header('Pragma: public');
+    header('Content-Length: ' . filesize($tmp_filename));
+
+    readfile($tmp_filename);
+    @unlink($tmp_filename);
+
+    exit;
+}
+
+/**
+ * Convert a recipe HTML fragment into plain text lines for the Word export.
+ *
+ * Prefers <li> items when present - matches format_recipe_content_html()'s
+ * <ul>/<ol> output in custom-category-functions.php, which is what
+ * _recipe_ingredients/_recipe_method normally hold. Falls back to stripping
+ * tags and splitting on block-level breaks for plain <p> content (notes).
+ *
+ * @param string $html
+ * @return string[]
+ */
+function recipe_export_html_to_lines($html) {
+    if (empty($html)) {
+        return array();
+    }
+
+    $lines = array();
+
+    if (preg_match_all('/<li[^>]*>(.*?)<\/li>/is', $html, $matches)) {
+        foreach ($matches[1] as $item) {
+            $text = trim(wp_strip_all_tags($item));
+            if ($text !== '') {
+                $lines[] = $text;
+            }
+        }
+    }
+
+    if (!empty($lines)) {
+        return $lines;
+    }
+
+    $normalized = preg_replace('/<\/(p|div|h[1-6])>/i', "\n", $html);
+    $normalized = preg_replace('/<br\s*\/?>/i', "\n", $normalized);
+    $normalized = wp_strip_all_tags($normalized);
+
+    foreach (preg_split('/\r\n|\r|\n/', $normalized) as $line) {
+        $line = trim($line);
+        if ($line !== '') {
+            $lines[] = $line;
+        }
+    }
+
+    return $lines;
 }

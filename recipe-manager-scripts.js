@@ -7,6 +7,8 @@ function updateSelectedCount() {
     const viewBtnTop = document.getElementById('viewBtnTop');
     const printBtn = document.getElementById('printBtn');
     const printBtnTop = document.getElementById('printBtnTop');
+    const docxBtn = document.getElementById('docxBtn');
+    const docxBtnTop = document.getElementById('docxBtnTop');
     const copyToMyBtn = document.getElementById('copyToMyBtn');
     const copyToMyBtnTop = document.getElementById('copyToMyBtnTop');
     const copyBtn = document.getElementById('copyBtn');
@@ -25,6 +27,10 @@ function updateSelectedCount() {
     // Print buttons
     if (printBtn) printBtn.disabled = (checked === 0);
     if (printBtnTop) printBtnTop.disabled = (checked === 0);
+
+    // Download as Word buttons
+    if (docxBtn) docxBtn.disabled = (checked === 0);
+    if (docxBtnTop) docxBtnTop.disabled = (checked === 0);
     
     // Copy to My buttons
     if (copyToMyBtn) copyToMyBtn.disabled = (checked === 0);
