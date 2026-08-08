@@ -484,11 +484,11 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
 
         $section->addPageBreak();
 
-        $section->addTitle(get_the_title($post_id), 1);
+        $section->addTitle(recipe_export_clean_text(get_the_title($post_id)), 1);
 
         $recipe_cats = get_recipe_categories($post_id);
         if (!empty($recipe_cats)) {
-            $category_names = wp_list_pluck($recipe_cats, 'cat_name');
+            $category_names = array_map('recipe_export_clean_text', wp_list_pluck($recipe_cats, 'cat_name'));
             $section->addText(
                 implode(', ', $category_names),
                 array('italic' => true, 'name' => $body_font, 'size' => 12),
@@ -512,7 +512,7 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
             $step_number++;
         }
 
-        if (trim(wp_strip_all_tags($notes_html)) !== '') {
+        if (trim(recipe_export_clean_text(wp_strip_all_tags($notes_html))) !== '') {
             $section->addTitle('Notes', 2);
             foreach (recipe_export_html_to_lines($notes_html) as $line) {
                 $section->addText($line, array('name' => $body_font, 'size' => 12));
@@ -552,6 +552,22 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
 }
 
 /**
+ * Decode HTML entities (e.g. &nbsp;, &amp;) into their plain UTF-8
+ * equivalents, and normalize the resulting non-breaking space (U+00A0) into
+ * a regular space. wp_strip_all_tags() only removes tags - it does not
+ * decode entities - so without this, raw entities like &nbsp; leak into the
+ * PHPWord/docx XML as literal text and corrupt the generated file.
+ *
+ * @param string $text
+ * @return string
+ */
+function recipe_export_clean_text($text) {
+    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = str_replace("\xC2\xA0", ' ', $text); // U+00A0 non-breaking space, UTF-8 bytes
+    return $text;
+}
+
+/**
  * Convert a recipe HTML fragment into plain text lines for the Word export.
  *
  * Prefers <li> items when present - matches format_recipe_content_html()'s
@@ -571,7 +587,7 @@ function recipe_export_html_to_lines($html) {
 
     if (preg_match_all('/<li[^>]*>(.*?)<\/li>/is', $html, $matches)) {
         foreach ($matches[1] as $item) {
-            $text = trim(wp_strip_all_tags($item));
+            $text = trim(recipe_export_clean_text(wp_strip_all_tags($item)));
             if ($text !== '') {
                 $lines[] = $text;
             }
@@ -587,7 +603,7 @@ function recipe_export_html_to_lines($html) {
     $normalized = wp_strip_all_tags($normalized);
 
     foreach (preg_split('/\r\n|\r|\n/', $normalized) as $line) {
-        $line = trim($line);
+        $line = trim(recipe_export_clean_text($line));
         if ($line !== '') {
             $lines[] = $line;
         }
