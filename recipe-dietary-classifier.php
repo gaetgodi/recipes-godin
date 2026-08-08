@@ -35,7 +35,7 @@ function classify_recipe_dietary($ingredients_text) {
 
     $api_key = ANTHROPIC_API_KEY;
 
-    $prompt = 'Given this ingredient list, respond ONLY with JSON: {"vegan": true/false, "vegetarian": true/false, "gluten_free": true/false}. Vegan = no animal products (no meat, fish, dairy, eggs, honey). Vegetarian = no meat or fish but allows dairy and eggs. Gluten-free = no wheat, barley, rye, or oats.
+    $prompt = 'Given this ingredient list, respond ONLY with JSON: {"vegan": true/false, "vegetarian": true/false, "gluten_free": true/false}. Vegan = no animal products (no meat, fish, dairy, eggs, honey). Vegetarian = no meat or fish but allows dairy and eggs. Gluten-free = no wheat, barley, rye, or oats. If an ingredient contains the word gluten-free in its name, treat it as gluten-free. Classify based on the ingredients as listed. Common naturally gluten-free ingredients (peanut butter, spices, sugar, oils, vinegar, tamari) should be treated as gluten-free unless wheat, barley, rye, or oats is explicitly mentioned. When in doubt about a plain ingredient name (like Five Spice), assume the standard version which is naturally gluten-free.
 
 Ingredient list:
 ' . wp_strip_all_tags($ingredients_text);
