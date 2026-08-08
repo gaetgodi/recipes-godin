@@ -468,14 +468,9 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
     );
     // minDepth/maxDepth of 1 restricts the TOC to Heading 1 entries (recipe
     // titles). The PAGEREF fields PHPWord writes into the TOC are not
-    // evaluated until Word itself updates them, so they show blank/no page
-    // number until the user does that - hence the note below.
+    // evaluated until Word updates them - setUpdateFields(true) below makes
+    // Word do that automatically on open, so no user action is needed.
     $section->addTOC(array('size' => 12, 'name' => $body_font), null, 1, 1);
-    $section->addText(
-        'Right-click the Table of Contents and select Update Field to populate page numbers.',
-        array('italic' => true, 'size' => 10, 'name' => $body_font),
-        array('alignment' => 'center', 'spaceBefore' => 200)
-    );
 
     // --- One recipe per page ---
     while ($recipes_query->have_posts()) {
@@ -523,6 +518,10 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
     wp_reset_postdata();
 
     $tmp_filename = '/tmp/recipe-export-' . time() . '-' . wp_generate_password(8, false, false) . '.docx';
+
+    // Force Word to auto-update fields (including the TOC page numbers) when
+    // the document is opened, so users don't have to manually update them.
+    $phpWord->getSettings()->setUpdateFields(true);
 
     $writer = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'Word2007');
     $writer->save($tmp_filename);
