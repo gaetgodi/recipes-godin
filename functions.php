@@ -297,84 +297,10 @@ require_once(get_stylesheet_directory() . '/allergen-matching-engine.php');
 require_once(get_stylesheet_directory() . '/allergen-image-upload-handler.php');
 
 // Load Dietary Classifier
+// Note: classification is NOT hooked to save_post here. page-recipe-editor.php's
+// form handler updates _recipe_ingredients and calls set_recipe_categories()
+// AFTER wp_update_post()/wp_insert_post() runs, so a save_post hook would read
+// stale ingredients and then have its own category changes overwritten by the
+// editor's later set_recipe_categories() call. Classification is instead run
+// directly from that handler, after its own set_recipe_categories() call.
 require_once(get_stylesheet_directory() . '/recipe-dietary-classifier.php');
-
-/**
- * On recipe save, classify ingredients for vegan/vegetarian/gluten-free and
- * add/remove the matching categories in the recipe author's own category
- * list, preserving every other category already assigned to the recipe.
- *
- * Guarded against autosaves/revisions/recursive saves the same way the rest
- * of this theme's save handlers are (see page-recipe-editor.php).
- */
-add_action('save_post_recipe', 'auto_classify_recipe_dietary', 20, 3);
-function auto_classify_recipe_dietary($post_id, $post, $update) {
-    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
-        return;
-    }
-
-    if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
-        return;
-    }
-
-    if ($post->post_status === 'auto-draft' || $post->post_status === 'trash') {
-        return;
-    }
-
-    // Re-entrancy guard: set_recipe_categories() below doesn't touch post
-    // meta/status, but this keeps the hook safe if that ever changes.
-    static $already_running = array();
-    if (!empty($already_running[$post_id])) {
-        return;
-    }
-    $already_running[$post_id] = true;
-
-    $ingredients_text = get_post_meta($post_id, '_recipe_ingredients', true);
-    $classification = classify_recipe_dietary($ingredients_text);
-
-    if ($classification === null) {
-        unset($already_running[$post_id]);
-        return;
-    }
-
-    $author_id = $post->post_author;
-
-    $dietary_labels = array(
-        'vegan' => 'Vegan',
-        'vegetarian' => 'Vegetarian',
-        'gluten_free' => 'Gluten-Free',
-    );
-
-    $current_cat_ids = wp_list_pluck(get_recipe_categories($post_id), 'cat_id');
-    $new_cat_ids = $current_cat_ids;
-
-    foreach ($dietary_labels as $key => $cat_name) {
-        $existing_cat = get_user_category_by_name($author_id, $cat_name);
-        $cat_id = null;
-
-        if ($classification[$key]) {
-            if ($existing_cat) {
-                $cat_id = $existing_cat->cat_id;
-            } else {
-                $result = create_user_category($author_id, $cat_name, 'food');
-                if (isset($result['cat_id'])) {
-                    $cat_id = $result['cat_id'];
-                }
-            }
-
-            if ($cat_id && !in_array($cat_id, $new_cat_ids)) {
-                $new_cat_ids[] = $cat_id;
-            }
-        }
-        // If false, leave the recipe's categories alone — don't remove an
-        // already-assigned dietary category on a false classification, since
-        // that would silently undo a manual assignment (or a prior correct
-        // classification) whenever the model's read of the ingredients shifts.
-    }
-
-    if ($new_cat_ids != $current_cat_ids) {
-        set_recipe_categories($post_id, array_values($new_cat_ids));
-    }
-
-    unset($already_running[$post_id]);
-}

@@ -250,6 +250,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
 
             set_recipe_products($saved_id, $submitted_product_ids);
 
+            // Dietary classification runs here, after set_recipe_categories() above,
+            // using the ingredients just saved to _recipe_ingredients. A save_post
+            // hook would run too early (inside wp_update_post()/wp_insert_post(),
+            // before _recipe_ingredients and categories are updated) and would have
+            // its changes overwritten by the set_recipe_categories() call above.
+            $dietary_classification = classify_recipe_dietary($ingredients);
+
+            if ($dietary_classification !== null) {
+                $saved_recipe_author_id = get_post_field('post_author', $saved_id);
+
+                $dietary_labels = array(
+                    'vegan' => 'Vegan',
+                    'vegetarian' => 'Vegetarian',
+                    'gluten_free' => 'Gluten-Free',
+                );
+
+                $updated_cat_ids = wp_list_pluck(get_recipe_categories($saved_id), 'cat_id');
+
+                foreach ($dietary_labels as $key => $cat_name) {
+                    if (!$dietary_classification[$key]) {
+                        continue;
+                    }
+
+                    $existing_cat = get_user_category_by_name($saved_recipe_author_id, $cat_name);
+
+                    if ($existing_cat) {
+                        $cat_id = $existing_cat->cat_id;
+                    } else {
+                        $result = create_user_category($saved_recipe_author_id, $cat_name, 'food');
+                        $cat_id = isset($result['cat_id']) ? $result['cat_id'] : null;
+                    }
+
+                    if ($cat_id && !in_array($cat_id, $updated_cat_ids)) {
+                        $updated_cat_ids[] = $cat_id;
+                    }
+                }
+
+                set_recipe_categories($saved_id, array_values($updated_cat_ids));
+            }
 
             $redirect_url = home_url('/recipe-manager/?saved=1' . $state_query);
             
