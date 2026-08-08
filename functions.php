@@ -365,11 +365,11 @@ function auto_classify_recipe_dietary($post_id, $post, $update) {
             if ($cat_id && !in_array($cat_id, $new_cat_ids)) {
                 $new_cat_ids[] = $cat_id;
             }
-        } else {
-            if ($existing_cat) {
-                $new_cat_ids = array_diff($new_cat_ids, array($existing_cat->cat_id));
-            }
         }
+        // If false, leave the recipe's categories alone — don't remove an
+        // already-assigned dietary category on a false classification, since
+        // that would silently undo a manual assignment (or a prior correct
+        // classification) whenever the model's read of the ingredients shifts.
     }
 
     if ($new_cat_ids != $current_cat_ids) {

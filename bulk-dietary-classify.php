@@ -46,7 +46,6 @@ $recipe_ids = get_posts(array(
 $total = count($recipe_ids);
 $processed = 0;
 $categories_added = 0;
-$categories_removed = 0;
 $errors = 0;
 $skipped_no_ingredients = 0;
 $error_log = array();
@@ -103,12 +102,11 @@ foreach ($recipe_ids as $recipe_id) {
                     $new_cat_ids[] = $cat_id;
                     $categories_added++;
                 }
-            } else {
-                if ($existing_cat && in_array($existing_cat->cat_id, $new_cat_ids)) {
-                    $new_cat_ids = array_diff($new_cat_ids, array($existing_cat->cat_id));
-                    $categories_removed++;
-                }
             }
+            // If false, leave the recipe's categories alone - don't remove an
+            // already-assigned dietary category on a false classification, since
+            // that would silently undo a manual assignment (or a prior correct
+            // classification) whenever the model's read of the ingredients shifts.
         }
 
         if ($new_cat_ids != $current_cat_ids) {
@@ -130,7 +128,6 @@ WP_CLI::log("Total recipes found: {$total}");
 WP_CLI::log("Total processed: {$processed}");
 WP_CLI::log("Skipped (no ingredients): {$skipped_no_ingredients}");
 WP_CLI::log("Categories added: {$categories_added}");
-WP_CLI::log("Categories removed: {$categories_removed}");
 WP_CLI::log("Errors: {$errors}");
 
 if (!empty($error_log)) {
