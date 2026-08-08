@@ -576,6 +576,10 @@ function recipe_export_clean_text($text) {
         }
         $text = $decoded;
     }
+    // Strip again: the decode loop above can turn encoded markup like
+    // &lt;div&gt; back into literal <div> tags, which the first strip_tags()
+    // pass (before decoding) could not have caught.
+    $text = strip_tags($text);
     $text = str_replace("\xC2\xA0", ' ', $text); // U+00A0 non-breaking space, UTF-8 bytes
     // Safe to re-escape here: the decode loop above has already resolved all
     // HTML entities to their UTF-8 characters, so any & remaining is a literal
