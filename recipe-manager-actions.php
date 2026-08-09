@@ -91,6 +91,9 @@ if (isset($_POST['bulk_action']) && !empty($_POST['selected_recipes'])) {
                             array('recipe_id' => $post_id),
                             array('%d')
                         );
+                        // Gallery photos live in their own table + attachments,
+                        // so wp_delete_post() alone won't touch them.
+                        delete_recipe_photos_for_recipe($post_id);
                         wp_delete_post($post_id, true);
                     }
                 }

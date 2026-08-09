@@ -49,6 +49,9 @@ add_action('wp_ajax_delete_recipe', function() {
     }
     
     if ($can_delete && current_user_can('edit_posts')) {
+        // Gallery photos live in a separate table + their own attachments,
+        // so wp_delete_post() alone won't touch them — clean those up first.
+        delete_recipe_photos_for_recipe($recipe_id);
         wp_delete_post($recipe_id, true);
         wp_send_json_success();
     } else {

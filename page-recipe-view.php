@@ -87,6 +87,89 @@ if (!empty($state_parts)) {
         grid-template-columns: 1fr !important;
     }
 }
+
+/* Photo Gallery: simple CSS-columns masonry (more reliably supported than
+   CSS grid masonry, which is still behind a flag in most browsers). */
+.recipe-gallery-masonry {
+    column-count: 3;
+    column-gap: 10px;
+    margin-top: 10px;
+}
+@media (max-width: 700px) {
+    .recipe-gallery-masonry {
+        column-count: 2;
+    }
+}
+.recipe-gallery-masonry img {
+    width: 100%;
+    display: block;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    break-inside: avoid;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+.recipe-gallery-masonry img:hover {
+    opacity: 0.85;
+}
+
+/* Shared lightbox overlay (one instance for the whole page, even though
+   multiple recipes/galleries can appear on this page at once). */
+.gallery-lightbox-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+.gallery-lightbox-overlay img {
+    max-width: 90vw;
+    max-height: 85vh;
+    border-radius: 4px;
+}
+.gallery-lightbox-close,
+.gallery-lightbox-prev,
+.gallery-lightbox-next {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    border-radius: 50%;
+}
+.gallery-lightbox-close {
+    top: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
+    line-height: 40px;
+}
+.gallery-lightbox-prev,
+.gallery-lightbox-next {
+    top: 50%;
+    transform: translateY(-50%);
+    width: 50px;
+    height: 50px;
+    font-size: 28px;
+    line-height: 50px;
+}
+.gallery-lightbox-prev {
+    left: 20px;
+}
+.gallery-lightbox-next {
+    right: 20px;
+}
+.gallery-lightbox-close:hover,
+.gallery-lightbox-prev:hover,
+.gallery-lightbox-next:hover {
+    background: rgba(200, 74, 49, 0.9);
+}
 </style>
 
 <div style="max-width: 1200px; margin: 40px auto; padding: 0 20px;">
@@ -229,7 +312,23 @@ if (!empty($state_parts)) {
                 <img src="<?php echo esc_url($featured_image_url); ?>" alt="Original recipe image" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;" />
             </div>
             <?php endif; ?>
-            
+
+            <?php $gallery_photos = get_recipe_photos($post_id); ?>
+            <?php if (!empty($gallery_photos)): ?>
+            <div style="grid-column: 1 / -1; margin-top: 20px; padding-top: 20px; border-top: 2px dashed #ddd;">
+                <h3 style="color: #c84a31; font-size: 18px; margin: 0 0 10px 0;">Photo Gallery</h3>
+                <div class="recipe-gallery-masonry"
+                     data-photos='<?php echo esc_attr(wp_json_encode(array_values(array_map(function($p) { return $p->photo_url; }, $gallery_photos)))); ?>'>
+                    <?php foreach ($gallery_photos as $index => $photo): ?>
+                    <img src="<?php echo esc_url($photo->photo_url); ?>"
+                         alt="Recipe gallery photo"
+                         data-index="<?php echo intval($index); ?>"
+                         onclick="openRecipeGalleryLightbox(this)" />
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
         </div>
         
     </div>
@@ -241,7 +340,58 @@ if (!empty($state_parts)) {
             ← Back to Recipe Manager
         </a>
     </div>
-    
+
 </div>
+
+<!-- Shared Photo Gallery lightbox (one instance for the whole page) -->
+<div id="recipeGalleryLightbox" class="gallery-lightbox-overlay" style="display: none;" onclick="if (event.target === this) closeRecipeGalleryLightbox();">
+    <button type="button" class="gallery-lightbox-close" onclick="closeRecipeGalleryLightbox();" title="Close">&times;</button>
+    <button type="button" class="gallery-lightbox-prev" onclick="navigateRecipeGalleryLightbox(-1);" title="Previous">&#8249;</button>
+    <img id="recipeGalleryLightboxImg" src="" alt="Recipe gallery photo (full size)" />
+    <button type="button" class="gallery-lightbox-next" onclick="navigateRecipeGalleryLightbox(1);" title="Next">&#8250;</button>
+</div>
+
+<script>
+// Photo Gallery lightbox — self-contained to this page, one shared overlay
+// reused across every recipe card's gallery (each card carries its own
+// photo URL list in a data-photos attribute).
+var rgPhotos = [];
+var rgIndex = 0;
+
+function openRecipeGalleryLightbox(imgEl) {
+    var container = imgEl.closest('.recipe-gallery-masonry');
+    rgPhotos = JSON.parse(container.getAttribute('data-photos'));
+    rgIndex = parseInt(imgEl.getAttribute('data-index'), 10);
+    showRecipeGalleryLightbox();
+}
+
+function showRecipeGalleryLightbox() {
+    document.getElementById('recipeGalleryLightboxImg').src = rgPhotos[rgIndex];
+    document.getElementById('recipeGalleryLightbox').style.display = 'flex';
+}
+
+function closeRecipeGalleryLightbox() {
+    document.getElementById('recipeGalleryLightbox').style.display = 'none';
+}
+
+function navigateRecipeGalleryLightbox(direction) {
+    if (rgPhotos.length === 0) return;
+    rgIndex = (rgIndex + direction + rgPhotos.length) % rgPhotos.length;
+    showRecipeGalleryLightbox();
+}
+
+document.addEventListener('keydown', function(e) {
+    var overlay = document.getElementById('recipeGalleryLightbox');
+    if (!overlay || overlay.style.display === 'none') return;
+
+    if (e.key === 'Escape') {
+        closeRecipeGalleryLightbox();
+    } else if (e.key === 'ArrowLeft') {
+        navigateRecipeGalleryLightbox(-1);
+    } else if (e.key === 'ArrowRight') {
+        navigateRecipeGalleryLightbox(1);
+    }
+});
+</script>
 
 <?php get_footer(); ?>

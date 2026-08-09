@@ -168,6 +168,26 @@ get_header();
         font-style: italic;
     }
 
+    /* Photo Gallery — simple wrapping grid, no masonry/JS/lightbox (this
+       page is print/PDF output only). */
+    .print-gallery-grid {
+        grid-column: 1 / -1;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed #ddd;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .print-gallery-grid img {
+        width: 90px;
+        height: 90px;
+        object-fit: cover;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+    }
+
     /* Attached products list — off by default, toggled by the on-screen
        checkbox only; never a saved setting. */
     .print-products-section {
@@ -340,6 +360,15 @@ while ($recipes->have_posts()):
         <?php if (!empty($notes)): ?>
         <div class="recipe-notes">
             <strong>Notes:</strong> <?php echo wp_kses_post($notes); ?>
+        </div>
+        <?php endif; ?>
+
+        <?php $gallery_photos = get_recipe_photos($post_id); ?>
+        <?php if (!empty($gallery_photos)): ?>
+        <div class="print-gallery-grid">
+            <?php foreach ($gallery_photos as $photo): ?>
+            <img src="<?php echo esc_url($photo->photo_url); ?>" alt="Recipe gallery photo" />
+            <?php endforeach; ?>
         </div>
         <?php endif; ?>
 
