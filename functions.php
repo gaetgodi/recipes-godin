@@ -290,8 +290,9 @@ add_action('wp_enqueue_scripts', 'enqueue_recipe_page_styles');
 require_once(get_stylesheet_directory() . '/recipe-image-upload-handler.php');
 require_once(get_stylesheet_directory() . '/recipe-model-health-check.php');
 
-// Load recipe gallery (multi-photo) data-layer functions
+// Load recipe gallery (multi-photo) data-layer functions and AJAX handlers
 require_once(get_stylesheet_directory() . '/recipe-gallery-functions.php');
+require_once(get_stylesheet_directory() . '/recipe-gallery-upload-handler.php');
 
 // Load Allergen Checker data/permission functions
 require_once(get_stylesheet_directory() . '/allergen-functions.php');

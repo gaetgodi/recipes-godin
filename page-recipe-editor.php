@@ -75,6 +75,9 @@ if (!current_user_can('edit_posts')) {
 $recipe_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $is_editing = ($recipe_id > 0);
 
+// Gallery photos can only exist for an already-saved recipe
+$gallery_photos = $is_editing ? get_recipe_photos($recipe_id) : array();
+
 // Carry filter/search state from the incoming URL, for Cancel/Back, Delete, and save redirects
 $state_parts = array();
 if (!empty($_GET['food_cat'])) {
@@ -389,8 +392,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
                 </div>
                 <?php endif; ?>
             </div>
+
+            <!-- Photo Gallery Section -->
+            <div class="gallery-section" style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 20px;">
+                <h3>Photo Gallery</h3>
+                <?php if ($is_editing): ?>
+                <p>Up to 10 extra photos, shown in the order you add them (separate from the featured image above).</p>
+                <p style="font-size: 13px; color: #666; margin-top: 5px;">
+                    <strong>Accepted formats:</strong> JPG, PNG, GIF, WebP<br>
+                    <strong>Maximum file size:</strong> 5 MB each
+                </p>
+
+                <input type="file" id="galleryFiles" accept="image/*" multiple style="display: none;" />
+                <button type="button" class="upload-btn" id="chooseGalleryBtn" onclick="document.getElementById('galleryFiles').click();" <?php echo (count($gallery_photos) >= 10) ? 'disabled' : ''; ?>>
+                    Choose Photos
+                </button>
+                <span id="galleryCounter" style="margin-left: 10px; color: #666;">
+                    <?php echo count($gallery_photos); ?> / 10
+                </span>
+
+                <div id="galleryStatus" class="upload-status" style="display: none; margin-top: 10px;"></div>
+
+                <div id="galleryThumbnails" class="gallery-thumb-grid">
+                    <?php foreach ($gallery_photos as $photo): ?>
+                    <div class="gallery-thumb" data-photo-id="<?php echo intval($photo->photo_id); ?>">
+                        <img src="<?php echo esc_url($photo->photo_url); ?>" alt="Recipe gallery photo" />
+                        <button type="button" class="gallery-thumb-delete" onclick="deleteGalleryPhoto(<?php echo intval($photo->photo_id); ?>, this)" title="Remove photo">x</button>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php else: ?>
+                <p style="color: #888;">Save the recipe first, then come back here to add gallery photos.</p>
+                <?php endif; ?>
+            </div>
         </div>
-        
+
         <!-- Text Import Section -->
         <div id="textImport" class="import-section" style="display: none;">
             <div class="text-import-section">
@@ -660,6 +696,55 @@ Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocol
     from { opacity: 0; }
     to { opacity: 1; }
 }
+
+.gallery-thumb-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+    margin-top: 15px;
+}
+
+.gallery-thumb {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #f8f8f8;
+}
+
+.gallery-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.gallery-thumb-delete {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    line-height: 22px;
+    padding: 0;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.gallery-thumb-delete:hover {
+    background: rgba(200, 74, 49, 0.9);
+}
+
+.gallery-thumb-delete:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
 </style>
 
 <script>
@@ -803,6 +888,150 @@ document.getElementById('extractBtn').addEventListener('click', function() {
         document.getElementById('uploadImageBtn').disabled = false;
     });
 });
+
+// Photo Gallery upload/delete handling
+const GALLERY_MAX = 10;
+const galleryFilesInput = document.getElementById('galleryFiles');
+
+if (galleryFilesInput) {
+    galleryFilesInput.addEventListener('change', function(e) {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        uploadGalleryPhotos(files);
+    });
+}
+
+function setGalleryCount(count) {
+    document.getElementById('galleryCounter').textContent = count + ' / ' + GALLERY_MAX;
+    document.getElementById('chooseGalleryBtn').disabled = (count >= GALLERY_MAX);
+}
+
+async function uploadGalleryPhotos(files) {
+    const statusDiv = document.getElementById('galleryStatus');
+    const chooseBtn = document.getElementById('chooseGalleryBtn');
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    const maxSize = 5 * 1024 * 1024;
+
+    chooseBtn.disabled = true;
+    statusDiv.className = 'upload-status processing';
+    statusDiv.style.display = 'block';
+
+    let uploaded = 0;
+    let stopped = false;
+
+    for (const file of files) {
+        if (stopped) break;
+
+        if (!validTypes.includes(file.type)) {
+            statusDiv.className = 'upload-status error';
+            statusDiv.textContent = '❌ Skipped "' + file.name + '": not a valid image file (JPG, PNG, GIF, or WebP)';
+            continue;
+        }
+
+        if (file.size > maxSize) {
+            statusDiv.className = 'upload-status error';
+            statusDiv.textContent = '❌ Skipped "' + file.name + '": too large (max 5 MB)';
+            continue;
+        }
+
+        statusDiv.className = 'upload-status processing';
+        statusDiv.textContent = '🔄 Uploading ' + file.name + ' (' + (uploaded + 1) + ' of ' + files.length + ')...';
+
+        const formData = new FormData();
+        formData.append('action', 'upload_recipe_gallery_photo');
+        formData.append('recipe_id', '<?php echo $recipe_id; ?>');
+        formData.append('nonce', '<?php echo wp_create_nonce('recipe_gallery_upload'); ?>');
+        formData.append('gallery_image', file);
+
+        try {
+            const response = await fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                addGalleryThumbnail(data.data.photo_id, data.data.photo_url);
+                setGalleryCount(data.data.count);
+                uploaded++;
+
+                if (data.data.count >= GALLERY_MAX) {
+                    stopped = true;
+                }
+            } else {
+                statusDiv.className = 'upload-status error';
+                statusDiv.textContent = '❌ ' + (data.data && data.data.message ? data.data.message : 'Upload failed');
+                if (data.data && data.data.count !== undefined) {
+                    setGalleryCount(data.data.count);
+                }
+                if (data.data && data.data.count >= GALLERY_MAX) {
+                    stopped = true;
+                }
+            }
+        } catch (error) {
+            statusDiv.className = 'upload-status error';
+            statusDiv.textContent = '❌ Upload failed: ' + error.message;
+        }
+    }
+
+    if (!stopped && statusDiv.className !== 'upload-status error') {
+        statusDiv.className = 'upload-status success';
+        statusDiv.textContent = '✅ ' + uploaded + ' photo(s) uploaded';
+    }
+
+    galleryFilesInput.value = '';
+    const currentCount = document.getElementById('galleryThumbnails').children.length;
+    chooseBtn.disabled = (currentCount >= GALLERY_MAX);
+}
+
+function addGalleryThumbnail(photoId, photoUrl) {
+    const grid = document.getElementById('galleryThumbnails');
+    const thumb = document.createElement('div');
+    thumb.className = 'gallery-thumb';
+    thumb.setAttribute('data-photo-id', photoId);
+    thumb.innerHTML = '<img src="' + photoUrl + '" alt="Recipe gallery photo" />' +
+        '<button type="button" class="gallery-thumb-delete" onclick="deleteGalleryPhoto(' + photoId + ', this)" title="Remove photo">x</button>';
+    grid.appendChild(thumb);
+}
+
+function deleteGalleryPhoto(photoId, buttonEl) {
+    if (!confirm('Remove this photo?')) return;
+
+    const statusDiv = document.getElementById('galleryStatus');
+    const chooseBtn = document.getElementById('chooseGalleryBtn');
+
+    buttonEl.disabled = true;
+
+    const formData = new FormData();
+    formData.append('action', 'delete_recipe_gallery_photo');
+    formData.append('nonce', '<?php echo wp_create_nonce('recipe_gallery_delete'); ?>');
+    formData.append('photo_id', photoId);
+
+    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            buttonEl.closest('.gallery-thumb').remove();
+            setGalleryCount(data.data.count);
+            statusDiv.style.display = 'none';
+        } else {
+            buttonEl.disabled = false;
+            statusDiv.className = 'upload-status error';
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = '❌ ' + (data.data && data.data.message ? data.data.message : 'Delete failed');
+        }
+    })
+    .catch(error => {
+        buttonEl.disabled = false;
+        statusDiv.className = 'upload-status error';
+        statusDiv.style.display = 'block';
+        statusDiv.textContent = '❌ Delete failed: ' + error.message;
+    });
+}
 
 // Text file upload handling
 document.getElementById('recipeTextFile').addEventListener('change', function(e) {
