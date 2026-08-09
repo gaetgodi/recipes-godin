@@ -308,3 +308,4 @@ require_once(get_stylesheet_directory() . '/allergen-image-upload-handler.php');
 // editor's later set_recipe_categories() call. Classification is instead run
 // directly from that handler, after its own set_recipe_categories() call.
 require_once(get_stylesheet_directory() . '/recipe-dietary-classifier.php');
+require_once(get_stylesheet_directory() . '/recipe-servings-classifier.php');

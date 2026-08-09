@@ -206,6 +206,7 @@ if (!empty($state_parts)) {
         
         $recipe_cats = get_recipe_categories($post_id);
         $category = !empty($recipe_cats) ? implode(', ', array_map(function($c) { return $c->cat_name; }, $recipe_cats)) : 'Uncategorized';
+        $recipe_servings = get_post_meta($post_id, '_recipe_servings', true);
 
         $recipe_author_id = get_post_field('post_author', $post_id);
         $can_edit = current_user_can('administrator') ||
@@ -230,6 +231,9 @@ if (!empty($state_parts)) {
             </h2>
             <span style="font-size: 14px; font-style: italic; margin-right: 15px;">
                 <?php echo esc_html($category); ?>
+                <?php if (!empty($recipe_servings)): ?>
+                &nbsp;|&nbsp;Serves: <?php echo esc_html($recipe_servings); ?>
+                <?php endif; ?>
             </span>
             <?php if ($can_edit): 
                 $edit_url = home_url('/recipe-editor/?id=' . $post_id . $state_query);

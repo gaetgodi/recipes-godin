@@ -121,7 +121,13 @@ get_header();
         font-size: 8pt;
         font-style: italic;
     }
-    
+
+    .recipe-servings {
+        font-size: 8pt;
+        font-style: italic;
+        margin-left: 8px;
+    }
+
     .recipe-content {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -337,6 +343,8 @@ while ($recipes->have_posts()):
     } else {
         $category = 'Uncategorized';
     }
+
+    $recipe_servings = get_post_meta($post_id, '_recipe_servings', true);
 ?>
 
 <div class="recipe-item">
@@ -344,6 +352,9 @@ while ($recipes->have_posts()):
         <span class="recipe-id"><?php echo esc_html($recipe_id); ?></span>
         <span class="recipe-title"><?php the_title(); ?></span>
         <span class="recipe-category"><?php echo esc_html($category); ?></span>
+        <?php if (!empty($recipe_servings)): ?>
+        <span class="recipe-servings"><?php echo esc_html($recipe_servings); ?></span>
+        <?php endif; ?>
     </div>
     
     <div class="recipe-content">

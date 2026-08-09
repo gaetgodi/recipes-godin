@@ -500,6 +500,15 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
             );
         }
 
+        $recipe_servings = get_post_meta($post_id, '_recipe_servings', true);
+        if (!empty($recipe_servings)) {
+            $section->addText(
+                'Servings: ' . recipe_export_clean_text($recipe_servings),
+                array('italic' => true, 'name' => $body_font, 'size' => 12),
+                array('spaceAfter' => 200)
+            );
+        }
+
         $ingredients_html = get_post_meta($post_id, '_recipe_ingredients', true);
         $method_html = get_post_meta($post_id, '_recipe_method', true);
         $notes_html = get_post_meta($post_id, '_recipe_notes', true);

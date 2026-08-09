@@ -136,6 +136,7 @@ if ($is_editing) {
     $recipe_ingredients = get_post_meta($recipe_id, '_recipe_ingredients', true);
     $recipe_method = get_post_meta($recipe_id, '_recipe_method', true);
     $recipe_notes = get_post_meta($recipe_id, '_recipe_notes', true);
+    $recipe_servings = get_post_meta($recipe_id, '_recipe_servings', true);
     
     function html_to_plain_text($html, $is_method = false) {
         if (empty($html)) return '';
@@ -180,6 +181,7 @@ if ($is_editing) {
     $recipe_ingredients = '';
     $recipe_method = '';
     $recipe_notes = '';
+    $recipe_servings = '';
     $recipe_category = array();
     $featured_image_id = 0;
     $featured_image_url = '';
@@ -194,6 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
     $ingredients = sanitize_textarea_field($_POST['recipe_ingredients']);
     $method = sanitize_textarea_field($_POST['recipe_method']);
     $notes = sanitize_textarea_field($_POST['recipe_notes']);
+    $servings = isset($_POST['recipe_servings']) ? sanitize_text_field($_POST['recipe_servings']) : '';
     $categories = isset($_POST['recipe_categories']) ? array_map('intval', $_POST['recipe_categories']) : array();
     $new_featured_image_id = isset($_POST['featured_image_id']) ? intval($_POST['featured_image_id']) : 0;
     $submitted_product_ids = isset($_POST['attached_product_ids']) ? array_map('intval', $_POST['attached_product_ids']) : array();
@@ -236,6 +239,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
             update_post_meta($saved_id, '_recipe_ingredients', $ingredients);
             update_post_meta($saved_id, '_recipe_method', $method);
             update_post_meta($saved_id, '_recipe_notes', $notes);
+            update_post_meta($saved_id, '_recipe_servings', $servings);
             
             // Set featured image if one was uploaded
             if ($new_featured_image_id > 0) {
@@ -296,6 +300,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
                 set_recipe_categories($saved_id, array_values($updated_cat_ids));
             }
 
+            // Servings estimation: add-only, same principle as the dietary
+            // classification above. Only runs when the field is currently
+            // empty, so it never overwrites a manually entered value or a
+            // prior estimate the user has since edited.
+            $current_servings = get_post_meta($saved_id, '_recipe_servings', true);
+            if (empty($current_servings)) {
+                $estimated_servings = estimate_recipe_servings($ingredients, $method);
+                if ($estimated_servings !== null) {
+                    update_post_meta($saved_id, '_recipe_servings', $estimated_servings);
+                }
+            }
+
             $redirect_url = home_url('/recipe-manager/?saved=1' . $state_query);
             
             wp_redirect($redirect_url);
@@ -308,6 +324,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
         $recipe_ingredients = $ingredients;
         $recipe_method = $method;
         $recipe_notes = $notes;
+        $recipe_servings = $servings;
         $recipe_category = $categories;
     }
 }
@@ -585,6 +602,20 @@ Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocol
             </div>
         </div>
         
+        <div class="form-group">
+            <label for="recipe_servings">
+                Servings (Optional)
+            </label>
+            <span class="help-text">e.g. "Serves 4" or "Makes 24 cookies" &mdash; left blank, it will be estimated automatically after you save</span>
+            <input
+                type="text"
+                id="recipe_servings"
+                name="recipe_servings"
+                value="<?php echo esc_attr($recipe_servings); ?>"
+                placeholder="Serves 4"
+            />
+        </div>
+
         <div class="form-group">
             <label for="recipe_notes">
                 Notes (Optional)
