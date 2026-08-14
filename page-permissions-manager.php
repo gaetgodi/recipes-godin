@@ -1,8 +1,11 @@
 <?php
 /**
  * Template Name: Permissions Manager
- * 
+ *
  * Manage who can access your recipe collection
+ *
+ * Preventive: DONOTCACHEPAGE + nocache_headers() below prevent the WPSC-class
+ * exposure found on SPP 2026-08-14 if page caching is ever added to this site.
  */
 
 // Must be logged in and have edit_posts capability
@@ -10,6 +13,9 @@ if (!is_user_logged_in() || !current_user_can('edit_posts')) {
     wp_redirect(home_url('/login/'));
     exit;
 }
+
+if ( ! defined( 'DONOTCACHEPAGE' ) ) define( 'DONOTCACHEPAGE', true );
+nocache_headers();
 
 // Include permission functions
 require_once(get_stylesheet_directory() . '/collection-permissions.php');

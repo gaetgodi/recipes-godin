@@ -8,6 +8,9 @@
  *
  * Phase 3: own library only. Product sharing/copy is added in Phase 5,
  * reusing collection-permissions.php's existing copy-on-share mechanism.
+ *
+ * Preventive: DONOTCACHEPAGE + nocache_headers() below prevent the WPSC-class
+ * exposure found on SPP 2026-08-14 if page caching is ever added to this site.
  */
 
 get_header();
@@ -16,6 +19,9 @@ if (!is_user_logged_in()) {
     wp_redirect(home_url('/login/'));
     exit;
 }
+
+if ( ! defined( 'DONOTCACHEPAGE' ) ) define( 'DONOTCACHEPAGE', true );
+nocache_headers();
 
 require_once(get_stylesheet_directory() . '/allergen-functions.php');
 

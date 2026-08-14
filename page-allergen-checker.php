@@ -3,6 +3,9 @@
  * Template Name: Allergen Checker
  *
  * Batch-check recipes and products against the user's active allergen profile.
+ *
+ * Preventive: DONOTCACHEPAGE + nocache_headers() below prevent the WPSC-class
+ * exposure found on SPP 2026-08-14 if page caching is ever added to this site.
  */
 
 get_header();
@@ -11,6 +14,9 @@ if (!is_user_logged_in()) {
     wp_redirect(home_url('/login/'));
     exit;
 }
+
+if ( ! defined( 'DONOTCACHEPAGE' ) ) define( 'DONOTCACHEPAGE', true );
+nocache_headers();
 
 require_once(get_stylesheet_directory() . '/collection-permissions.php');
 require_once(get_stylesheet_directory() . '/allergen-functions.php');
