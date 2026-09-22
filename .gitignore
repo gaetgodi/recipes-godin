@@ -9,3 +9,4 @@ node_modules/
 *.sql
 vendor/
 composer.lock
+notes-import/
