@@ -3,8 +3,14 @@
  * Recipe Image Upload and OCR Handler
  * Handles featured image upload and Claude API OCR extraction
  *
- * @version 2.1.4
+ * @version 2.1.5
  * @changelog
+ *   2.1.5 - Translation prompt now explicitly forbids translating the TITLE:/INGREDIENTS:/
+ *            METHOD:/NOTES: section labels themselves (some target languages were translating
+ *            them despite the old "maintain the exact same format" wording, breaking
+ *            parse_recipe_extraction()'s regex). Added belt-and-suspenders fallback: the
+ *            parser also recognizes common translated variants of these labels in case the
+ *            prompt instruction is missed.
  *   2.1.4 - Replaced hardcoded model string 'claude-sonnet-4-20250514' (retired June 15,
  *            2026) with ANTHROPIC_MODEL constant, defined in wp-config.php. All three
  *            API calls (image extraction, text extraction, translation) now reference
@@ -277,6 +283,32 @@ If any part is illegible or crossed out, note it with [unclear] rather than gues
 }
 
 /**
+ * Known translations of the TITLE:/INGREDIENTS:/METHOD:/NOTES: section labels,
+ * covering the languages offered in the recipe editor's translate dropdown.
+ * Used only as a fallback in parse_recipe_extraction() — the translation prompt
+ * explicitly tells the model to keep the English labels, but this catches it
+ * if that instruction is missed for a given language.
+ */
+function get_recipe_label_variants() {
+    return array(
+        'title' => array('TITLE', 'TITRE', 'TÍTULO', 'TITOLO', 'TITEL', 'शीर्षक', 'શીર્ષક', '标题', '標題', 'タイトル', '제목', 'العنوان', 'НАЗВАНИЕ', 'ЗАГОЛОВОК', 'TYTUŁ', 'BAŞLIK', 'TIÊU ĐỀ', 'ชื่อเรื่อง'),
+        'ingredients' => array('INGREDIENTS', 'INGRÉDIENTS', 'INGREDIENTES', 'INGREDIENTI', 'ZUTATEN', 'सामग्री', 'ઘટકો', '配料', '材料', '재료', 'المكونات', 'ИНГРЕДИЕНТЫ', 'INGREDIËNTEN', 'SKŁADNIKI', 'MALZEMELER', 'NGUYÊN LIỆU', 'ส่วนผสม'),
+        'method' => array('METHOD', 'MÉTHODE', 'MÉTODO', 'METODO', 'ZUBEREITUNG', 'विधि', 'પદ્ધતિ', '做法', '方法', '조리법', 'الطريقة', 'СПОСОБ ПРИГОТОВЛЕНИЯ', 'BEREIDING', 'SPOSÓB PRZYGOTOWANIA', 'HAZIRLANIŞI', 'CÁCH LÀM', 'วิธีทำ'),
+        'notes' => array('NOTES', 'REMARQUES', 'NOTAS', 'NOTE', 'NOTIZEN', 'नोट्स', 'નોંધ', '备注', '備考', '메모', 'ملاحظات', 'ЗАМЕТКИ', 'NOTITIES', 'NOTATKI', 'NOTLAR', 'GHI CHÚ', 'หมายเหตุ'),
+    );
+}
+
+/**
+ * Builds a preg alternation from a list of label variants, longest first so a
+ * short variant (e.g. NOTE) can't shadow a longer one that starts with it
+ * (e.g. NOTES).
+ */
+function build_recipe_label_alternation($variants) {
+    usort($variants, function ($a, $b) { return strlen($b) - strlen($a); });
+    return implode('|', array_map(function ($v) { return preg_quote($v, '/'); }, $variants));
+}
+
+/**
  * Parse Claude's formatted response into structured data
  */
 function parse_recipe_extraction($text) {
@@ -285,28 +317,34 @@ function parse_recipe_extraction($text) {
         'ingredients' => '',
         'method' => ''
     );
-    
+
+    $labels = get_recipe_label_variants();
+    $title_alt = build_recipe_label_alternation($labels['title']);
+    $ingredients_alt = build_recipe_label_alternation($labels['ingredients']);
+    $method_alt = build_recipe_label_alternation($labels['method']);
+    $notes_alt = build_recipe_label_alternation($labels['notes']);
+
     // Extract title
-    if (preg_match('/TITLE:\s*(.+?)(?=\n|$)/i', $text, $matches)) {
+    if (preg_match('/(?:' . $title_alt . ')\s*:\s*(.+?)(?=\n|$)/iu', $text, $matches)) {
         $result['title'] = trim($matches[1]);
     }
-    
-    // Extract ingredients
-    if (preg_match('/INGREDIENTS:\s*\n(.+?)(?=\n\s*METHOD:|$)/is', $text, $matches)) {
+
+    // Extract ingredients — stop at METHOD (English or a recognized translated variant)
+    if (preg_match('/(?:' . $ingredients_alt . ')\s*:\s*\n(.+?)(?=\n\s*(?:' . $method_alt . ')\s*:|$)/isu', $text, $matches)) {
         $ingredients = trim($matches[1]);
         // Clean up and format
         $ingredients = preg_replace('/^[-•*]\s*/m', '', $ingredients);
         $result['ingredients'] = $ingredients;
     }
-    
-    // Extract method — stop at NOTES: if present
-    if (preg_match('/METHOD:\s*\n(.+?)(?=\n\s*NOTES:|$)/is', $text, $matches)) {
+
+    // Extract method — stop at NOTES (English or a recognized translated variant) if present
+    if (preg_match('/(?:' . $method_alt . ')\s*:\s*\n(.+?)(?=\n\s*(?:' . $notes_alt . ')\s*:|$)/isu', $text, $matches)) {
         $method = trim($matches[1]);
         // Clean up and format
         $method = preg_replace('/^\d+[\.)]\s*/m', '', $method);
         $result['method'] = $method;
     }
-    
+
     return $result;
 }
 
@@ -336,7 +374,7 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
         'messages' => array(
             array(
                 'role' => 'user',
-                'content' => "Please translate this recipe to $target_language. Maintain the exact same format (TITLE:, INGREDIENTS:, METHOD:, and NOTES: if present). If it's already in $target_language, just return it as-is. Preserve any [inferred] or [unclear] tags as-is.\n\n" . $text_to_translate
+                'content' => "Please translate this recipe to $target_language.\n\nIMPORTANT: The section labels TITLE:, INGREDIENTS:, METHOD:, and NOTES: (if present) must remain EXACTLY as written in English — do not translate these labels under any circumstances, even though you are translating everything else to $target_language. Only translate the content that follows each label.\n\nIf the recipe is already in $target_language, return it as-is. Preserve any [inferred] or [unclear] tags exactly as written, in English, do not translate them either.\n\n" . $text_to_translate
             )
         )
     );
@@ -387,8 +425,9 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
     // Parse the translated response
     $parsed = parse_recipe_extraction($translated_text);
     
-    // Extract notes if present
-    if (preg_match('/NOTES:\s*\n(.+?)$/is', $translated_text, $matches)) {
+    // Extract notes if present (English or a recognized translated variant)
+    $notes_alt = build_recipe_label_alternation(get_recipe_label_variants()['notes']);
+    if (preg_match('/(?:' . $notes_alt . ')\s*:\s*\n(.+?)$/isu', $translated_text, $matches)) {
         $parsed['notes'] = trim($matches[1]);
     } else {
         $parsed['notes'] = '';
