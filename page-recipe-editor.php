@@ -4,8 +4,12 @@
  *
  * Frontend recipe add/edit interface with featured image OCR and text import
  *
- * @version 2.2.0
+ * @version 2.2.1
  * @changelog
+ *   2.2.1 - delete_recipe AJAX handler moved to recipe-image-upload-handler.php (this file
+ *            only loads when the editor page renders, so admin-ajax.php never had the handler
+ *            and returned "0"). Delete button now reads the JSON reply and alerts on failure
+ *            instead of always redirecting.
  *   2.2.0 - Cancel/Back link, Delete redirect, and save-success redirect now preserve
  *            food_cat/author_cat/search state from the two-group filter system,
  *            instead of the old single recipe_cat/from_cat parameter.
@@ -19,45 +23,8 @@
  *   1.0.0 - Initial release.
  */
 
-// Include the image upload handler
+// Include the image upload handler (also registers the delete_recipe AJAX handler)
 require_once(get_stylesheet_directory() . '/recipe-image-upload-handler.php');
-
-// Handle AJAX delete request
-add_action('wp_ajax_delete_recipe', function() {
-    check_ajax_referer('delete_recipe_' . $_POST['recipe_id']);
-    
-    require_once(get_stylesheet_directory() . '/collection-permissions.php');
-    
-    $recipe_id = intval($_POST['recipe_id']);
-    $recipe = get_post($recipe_id);
-    
-    if (!$recipe || $recipe->post_type !== 'recipe') {
-        wp_send_json_error();
-    }
-    
-    $current_user_id = get_current_user_id();
-    $recipe_owner_id = $recipe->post_author;
-    
-    // Can delete if: administrator, owner, or has editor permission
-    $can_delete = false;
-    if (current_user_can('administrator')) {
-        $can_delete = true;
-    } elseif ($recipe_owner_id == $current_user_id) {
-        $can_delete = true;
-    } elseif (user_can_manage_collection($current_user_id, $recipe_owner_id)) {
-        $can_delete = true;
-    }
-    
-    if ($can_delete && current_user_can('edit_posts')) {
-        // Gallery photos live in a separate table + their own attachments,
-        // so wp_delete_post() alone won't touch them — clean those up first.
-        delete_recipe_photos_for_recipe($recipe_id);
-        wp_delete_post($recipe_id, true);
-        wp_send_json_success();
-    } else {
-        wp_send_json_error();
-    }
-});
 
 get_header();
 
@@ -691,7 +658,13 @@ Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocol
                             method: 'POST',
                             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                             body: 'action=delete_recipe&recipe_id=<?php echo $recipe_id; ?>&_wpnonce=<?php echo wp_create_nonce('delete_recipe_' . $recipe_id); ?>'
-                        }).then(() => window.location.href = '<?php echo esc_url($back_url); ?>');
+                        }).then(r => r.json()).then(res => {
+                            if (res && res.success) {
+                                window.location.href = '<?php echo esc_url($back_url); ?>';
+                            } else {
+                                alert('Could not delete this recipe.');
+                            }
+                        }).catch(() => alert('Could not delete this recipe.'));
                     }">
                 🗑️ Delete Recipe
             </button>

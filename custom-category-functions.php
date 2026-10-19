@@ -7,6 +7,15 @@
  */
 
 /**
+ * Regex matching HTML comments and real tags by known tag name, shared by
+ * format_recipe_content_html() and format_recipe_notes_html(). Known names only,
+ * so literal text like "<<Or>>" or "<5 min" is kept as text.
+ */
+function recipe_known_tags_pattern() {
+    return '#<!--.*?-->|</?(?:p|br|div|span|h[1-6]|a|img|strong|b|em|i|u|font|ul|ol|li|table|tbody|thead|tr|td|th|sup|sub|small|center|script|style|iframe|object|embed|form|input|button|meta|link)\b[^<>]*>#is';
+}
+
+/**
  * Convert plain-text recipe content (one item per line) into the <ul>/<ol> HTML
  * that _recipe_ingredients / _recipe_method are expected to hold (rendered via
  * wp_kses_post() in page-recipe-view.php, so plain text with no list markup
@@ -27,8 +36,7 @@
 function format_recipe_content_html($content, $is_method = false) {
     if (empty($content)) return '';
 
-    // Known tag names only, so literal text like "<<Or>>" or "<5 min" is kept as text.
-    $tag_re = '#<!--.*?-->|</?(?:p|br|div|span|h[1-6]|a|img|strong|b|em|i|u|font|ul|ol|li|table|tbody|thead|tr|td|th|sup|sub|small|center|script|style|iframe|object|embed|form|input|button|meta|link)\b[^<>]*>#is';
+    $tag_re = recipe_known_tags_pattern();
     $is_markup = (bool) preg_match('#<\s*/?\s*(?:ul|ol|li|p|br)\b#i', $content);
     $was_list = $is_markup && preg_match('#<\s*(?:ul|ol|li)\b#i', $content);
 
@@ -79,15 +87,29 @@ function format_recipe_content_html($content, $is_method = false) {
 }
 
 /**
- * Wrap plain-text recipe notes in a <p> tag if they aren't already HTML,
- * matching the treatment ingredients/method get via format_recipe_content_html().
+ * Wrap plain-text recipe notes in a <p> tag, matching the treatment
+ * ingredients/method get via format_recipe_content_html().
  * Shared by the recipe editor's save handler and the CLI bulk importer.
+ *
+ * Notes that already contain markup (pasted HTML, or a previously stored value)
+ * are split into paragraphs at <p>/<br>/block boundaries, real tags are removed,
+ * and each paragraph is escaped once with esc_html() into its own <p>. Entities
+ * are left for esc_html() (which does not double-encode) rather than decoded, so
+ * feeding the function its own output returns it unchanged.
  */
 function format_recipe_notes_html($notes) {
-    if (!empty($notes) && strpos($notes, '<p>') === false) {
+    if (empty($notes)) return $notes;
+    if (!preg_match('#<\s*/?\s*(?:ul|ol|li|p|br)\b#i', $notes)) {
         return '<p>' . esc_html($notes) . '</p>';
     }
-    return $notes;
+
+    $parts = preg_split('#<\s*br\b[^<>]*>|<\s*/?\s*(?:ul|ol|li|p|div|h[1-6]|tr)\b[^<>]*>#i', $notes);
+    $paragraphs = array();
+    foreach ($parts as $part) {
+        $part = preg_replace(recipe_known_tags_pattern(), '', $part);
+        if (trim($part) !== '') $paragraphs[] = '<p>' . esc_html($part) . '</p>';
+    }
+    return implode('', $paragraphs);
 }
 
 /**

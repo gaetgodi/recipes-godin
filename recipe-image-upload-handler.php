@@ -3,8 +3,11 @@
  * Recipe Image Upload and OCR Handler
  * Handles featured image upload and Claude API OCR extraction
  *
- * @version 2.1.5
+ * @version 2.2.0
  * @changelog
+ *   2.2.0 - Added the editor's delete_recipe AJAX handler (moved from page-recipe-editor.php,
+ *            where it was only registered while the editor page itself was rendering).
+ *            Now also removes the recipe's category relationships, like the list's bulk delete.
  *   2.1.5 - Translation prompt now explicitly forbids translating the TITLE:/INGREDIENTS:/
  *            METHOD:/NOTES: section labels themselves (some target languages were translating
  *            them despite the old "maintain the exact same format" wording, breaking
@@ -36,6 +39,50 @@
 
 // Security check
 if (!defined('ABSPATH')) exit;
+
+/**
+ * AJAX Handler: Delete a recipe from the editor page's Delete button
+ */
+add_action('wp_ajax_delete_recipe', 'handle_recipe_delete');
+
+function handle_recipe_delete() {
+    $recipe_id = isset($_POST['recipe_id']) ? absint($_POST['recipe_id']) : 0;
+    check_ajax_referer('delete_recipe_' . $recipe_id);
+
+    require_once(get_stylesheet_directory() . '/collection-permissions.php');
+    require_once(get_stylesheet_directory() . '/recipe-gallery-functions.php');
+
+    $recipe = get_post($recipe_id);
+
+    if (!$recipe || $recipe->post_type !== 'recipe') {
+        wp_send_json_error();
+    }
+
+    $current_user_id = get_current_user_id();
+    $recipe_owner_id = $recipe->post_author;
+
+    // Can delete if: administrator, owner, or has editor permission
+    $can_delete = false;
+    if (current_user_can('administrator')) {
+        $can_delete = true;
+    } elseif ($recipe_owner_id == $current_user_id) {
+        $can_delete = true;
+    } elseif (user_can_manage_collection($current_user_id, $recipe_owner_id)) {
+        $can_delete = true;
+    }
+
+    if ($can_delete && current_user_can('edit_posts')) {
+        // Same cleanup as the recipe list's bulk delete: category relationships live in a
+        // custom table and gallery photos in their own table + attachments, so
+        // wp_delete_post() alone won't touch either.
+        set_recipe_categories($recipe_id, array());
+        delete_recipe_photos_for_recipe($recipe_id);
+        if (wp_delete_post($recipe_id, true)) {
+            wp_send_json_success();
+        }
+    }
+    wp_send_json_error();
+}
 
 /**
  * AJAX Handler: Upload image and extract recipe via Claude API
