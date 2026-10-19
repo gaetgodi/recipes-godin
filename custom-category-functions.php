@@ -15,24 +15,60 @@
  * Shared by the recipe editor's save handler (page-recipe-editor.php) and the
  * CLI bulk importer (import-notes-recipes.php) so both produce identical markup.
  *
+ * Content that already contains list/paragraph markup (pasted or extracted HTML, or
+ * a previously stored value) is normalised back to plain lines first, so every
+ * line still goes through esc_html() exactly once. Feeding the function its own
+ * output returns it unchanged.
+ *
  * @param string $content  Raw plain-text content, one ingredient/step per line.
  * @param bool   $is_method True to strip leading step numbers and wrap in <ol>,
  *                          false to strip leading bullets and wrap in <ul>.
  */
 function format_recipe_content_html($content, $is_method = false) {
     if (empty($content)) return '';
-    if (strpos($content, '<ul>') !== false || strpos($content, '<ol>') !== false) return $content;
 
-    $lines = array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $content)));
+    // Known tag names only, so literal text like "<<Or>>" or "<5 min" is kept as text.
+    $tag_re = '#<!--.*?-->|</?(?:p|br|div|span|h[1-6]|a|img|strong|b|em|i|u|font|ul|ol|li|table|tbody|thead|tr|td|th|sup|sub|small|center|script|style|iframe|object|embed|form|input|button|meta|link)\b[^<>]*>#is';
+    $is_markup = (bool) preg_match('#<\s*/?\s*(?:ul|ol|li|p|br)\b#i', $content);
+    $was_list = $is_markup && preg_match('#<\s*(?:ul|ol|li)\b#i', $content);
+
+    if ($is_markup) {
+        // Each <li>, <p>, <br> (or block tag) boundary becomes a line break; raw newlines inside markup are just whitespace.
+        // Decode and re-split until stable so escaped markup (&lt;p&gt;...) is handled too.
+        $text = preg_replace('/\r\n|\r|\n/', ' ', $content);
+        for ($i = 0; $i < 5; $i++) {
+            $prev = $text;
+            $text = preg_replace('#<\s*br\b[^<>]*>|<\s*/?\s*(?:ul|ol|li|p|div|h[1-6]|tr)\b[^<>]*>#i', "\n", $text);
+            $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            if ($text === $prev) break;
+        }
+    } else {
+        $text = $content;
+    }
+
+    $lines = array();
+    foreach (preg_split('/\r\n|\r|\n/', $text) as $line) {
+        // Strip remaining tags and decode entities until nothing changes, then collapse whitespace (incl. &nbsp;).
+        for ($i = 0; $i < 5; $i++) {
+            $prev = $line;
+            $line = html_entity_decode(preg_replace($tag_re, ' ', $line), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            if ($line === $prev) break;
+        }
+        $lines[] = trim(preg_replace('/[\s\x{00A0}]+/u', ' ', $line));
+    }
+    $lines = array_values(array_filter($lines));
     if (empty($lines)) return '';
-    if (count($lines) === 1) return '<p>' . esc_html($lines[0]) . '</p>';
+    if (count($lines) === 1 && !$was_list) return '<p>' . esc_html($lines[0]) . '</p>';
 
     $list_items = [];
     foreach ($lines as $line) {
-        $line = preg_replace('/^[\-•*]\s+/', '', $line);
+        // Bullets/step numbers are only typed in plain text; list items already had theirs removed.
+        if (!$is_markup) {
+            $line = preg_replace('/^[\-•*]\s+/u', '', $line);
 
-        if ($is_method) {
-            $line = preg_replace('/^\d+[\.)]\s+/', '', $line);
+            if ($is_method) {
+                $line = preg_replace('/^\d+[\.)]\s+/', '', $line);
+            }
         }
 
         if (!empty($line)) $list_items[] = '<li>' . esc_html($line) . '</li>';
