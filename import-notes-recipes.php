@@ -802,6 +802,7 @@ foreach ($final_candidates as $i => $block) {
     update_post_meta($post_id, '_recipe_ingredients', $ingredients_html);
     update_post_meta($post_id, '_recipe_method', $method_html);
     update_post_meta($post_id, '_recipe_notes', $notes_html);
+    if (!empty($extracted['language'])) update_post_meta($post_id, '_recipe_original_lang', $extracted['language']);
     update_post_meta($post_id, '_recipe_id', 'R' . str_pad($post_id, 4, '0', STR_PAD_LEFT));
 
     $created_count++;

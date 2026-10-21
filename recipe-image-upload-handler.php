@@ -3,8 +3,17 @@
  * Recipe Image Upload and OCR Handler
  * Handles featured image upload and Claude API OCR extraction
  *
- * @version 2.2.0
+ * @version 2.3.0
  * @changelog
+ *   2.3.0 - Recipes keep the language they were written in. Both extraction prompts (image
+ *            and text, strict and interpret) now return LANGUAGE:, SERVINGS: and a real
+ *            NOTES: section in the source language and never translate; interpret mode
+ *            no longer translates to English. parse_recipe_extraction() returns language,
+ *            servings and notes. Translation now covers servings, can detect the source
+ *            language (SOURCE_LANGUAGE:) for hand-typed recipes, and no longer skips notes
+ *            starting with RAW EXTRACTION:/ORIGINAL TEXT: — the editor always sends the
+ *            in-memory original, never the raw extraction dump. Extraction max_tokens
+ *            raised to 3000 for the added NOTES section.
  *   2.2.0 - Added the editor's delete_recipe AJAX handler (moved from page-recipe-editor.php,
  *            where it was only registered while the editor page itself was rendering).
  *            Now also removes the recipe's category relationships, like the list's bulk delete.
@@ -187,23 +196,11 @@ Your job:
 1. Extract what is clearly written (ingredients, quantities, steps).
 2. Ignore crossed-out or scribbled content.
 3. Where the recipe appears incomplete or a step is only hinted at, use culinary reasoning to fill in the gap — but TAG every inferred addition with [inferred].
-4. Translate non-English or non-Latin script content into English.
+4. Keep the source language. Do NOT translate anything; write any inferred additions in the source language too.
 5. Keep the original meaning and proportions; do not substitute ingredients.
-6. For the title: if no title is visible, create a short descriptive English title based on the main ingredient and cuisine style (e.g. "Gujarati Soybean Curry", "Spiced Chickpea Stew"). Never use "Untitled Recipe".
+6. For the title: if no title is visible, create a short descriptive title in the source language based on the main ingredient and cuisine style (e.g. "Gujarati Soybean Curry", "Spiced Chickpea Stew"). Never use "Untitled Recipe".
 
-Format your response EXACTLY like this:
-
-TITLE: [descriptive English title]
-
-INGREDIENTS:
-[ingredient 1]
-[ingredient 2]
-[etc.]
-
-METHOD:
-[step 1]
-[step 2]
-[etc.]
+' . get_recipe_extraction_format('[recipe title, or a descriptive title in the source language]') . '
 
 Example of tagging: "Simmer for 20 minutes [inferred] until chickpeas are tender [inferred]."
 
@@ -212,25 +209,16 @@ If there is NO recipe visible in this image, respond with exactly: "NO_RECIPE_FO
         $prompt = 'Please extract the recipe from this image. If this is a handwritten or printed recipe, extract:
 
 1. Recipe title (if visible)
-2. Ingredients list (one per line)
-3. Method/Instructions (one step per line)
+2. Servings/yield (if stated)
+3. Ingredients list (one per line)
+4. Method/Instructions (one step per line)
+5. Notes (any other text that is not an ingredient or a step)
 
-Format your response EXACTLY like this:
-
-TITLE: [recipe title or "Untitled Recipe" if not visible]
-
-INGREDIENTS:
-[ingredient 1]
-[ingredient 2]
-[etc.]
-
-METHOD:
-[step 1]
-[step 2]
-[etc.]
+' . get_recipe_extraction_format('[recipe title or "Untitled Recipe" if not visible]') . '
 
 If there is NO recipe visible in this image, respond with exactly: "NO_RECIPE_FOUND"
 
+Do NOT translate the text - keep it in the original language. Just extract and structure it.
 Be accurate with measurements and spelling. Preserve the original wording as much as possible.
 If any part is illegible or crossed out, note it with [unclear] rather than guessing.';
     }
@@ -238,7 +226,7 @@ If any part is illegible or crossed out, note it with [unclear] rather than gues
     // Prepare the API request
     $request_body = array(
         'model' => ANTHROPIC_MODEL,
-        'max_tokens' => 2000,
+        'max_tokens' => 3000,
         'messages' => array(
             array(
                 'role' => 'user',
@@ -342,7 +330,67 @@ function get_recipe_label_variants() {
         'ingredients' => array('INGREDIENTS', 'INGRÉDIENTS', 'INGREDIENTES', 'INGREDIENTI', 'ZUTATEN', 'सामग्री', 'ઘટકો', '配料', '材料', '재료', 'المكونات', 'ИНГРЕДИЕНТЫ', 'INGREDIËNTEN', 'SKŁADNIKI', 'MALZEMELER', 'NGUYÊN LIỆU', 'ส่วนผสม'),
         'method' => array('METHOD', 'MÉTHODE', 'MÉTODO', 'METODO', 'ZUBEREITUNG', 'विधि', 'પદ્ધતિ', '做法', '方法', '조리법', 'الطريقة', 'СПОСОБ ПРИГОТОВЛЕНИЯ', 'BEREIDING', 'SPOSÓB PRZYGOTOWANIA', 'HAZIRLANIŞI', 'CÁCH LÀM', 'วิธีทำ'),
         'notes' => array('NOTES', 'REMARQUES', 'NOTAS', 'NOTE', 'NOTIZEN', 'नोट्स', 'નોંધ', '备注', '備考', '메모', 'ملاحظات', 'ЗАМЕТКИ', 'NOTITIES', 'NOTATKI', 'NOTLAR', 'GHI CHÚ', 'หมายเหตุ'),
+        'servings' => array('SERVINGS', 'PORTIONS', 'PORCIONES', 'PORZIONI', 'PORTIONEN', 'PORÇÕES', 'PORCJE', 'PORSİYON', 'ПОРЦИИ', 'PORTIES', 'KHẨU PHẦN'),
     );
+}
+
+/**
+ * Language names offered in the recipe editor's translate dropdown, as English
+ * names. The extraction and translation prompts ask the model to report the
+ * source language using one of these, so it can be compared directly with the
+ * dropdown value in the editor.
+ */
+function get_recipe_language_names() {
+    return array('English', 'French', 'Spanish', 'Italian', 'German', 'Portuguese', 'Gujarati', 'Hindi', 'Mandarin Chinese', 'Japanese', 'Korean', 'Arabic', 'Russian', 'Dutch', 'Polish', 'Turkish', 'Vietnamese', 'Thai');
+}
+
+/**
+ * Normalizes a language name reported by the model (or posted by the editor)
+ * to the canonical dropdown spelling when it matches one, case-insensitively.
+ * Anything else is kept as a sanitized free-text name; empty input stays empty.
+ */
+function normalize_recipe_language($language) {
+    $language = trim(sanitize_text_field($language), " \t.[]\"'");
+    if ($language === '') {
+        return '';
+    }
+    foreach (get_recipe_language_names() as $name) {
+        if (strcasecmp($name, $language) === 0) {
+            return $name;
+        }
+    }
+    if (strcasecmp($language, 'Chinese') === 0 || strcasecmp($language, 'Mandarin') === 0) {
+        return 'Mandarin Chinese';
+    }
+    return $language;
+}
+
+/**
+ * Shared output-format block for the image and text extraction prompts, so all
+ * four prompt variants ask for the same LANGUAGE/TITLE/SERVINGS/INGREDIENTS/
+ * METHOD/NOTES layout that parse_recipe_extraction() expects.
+ */
+function get_recipe_extraction_format($title_hint) {
+    $languages = implode(', ', get_recipe_language_names());
+
+    return 'Format your response EXACTLY like this. The section labels LANGUAGE:, TITLE:, SERVINGS:, INGREDIENTS:, METHOD: and NOTES: must stay in English, but everything after them stays in the language of the source:
+
+LANGUAGE: [the language the recipe is written in, given as its English name — one of: ' . $languages . ' — or another English language name if none of these fit]
+TITLE: ' . $title_hint . '
+SERVINGS: [the yield or number of servings exactly as written in the source, e.g. "pour 6 personnes"; leave blank if not stated]
+
+INGREDIENTS:
+[ingredient 1]
+[ingredient 2]
+[etc.]
+
+METHOD:
+[step 1]
+[step 2]
+[etc.]
+
+NOTES:
+[any tips, variations, serving suggestions, storage advice, source or attribution, or other comments from the source that are not ingredients or method steps; leave blank if there are none]';
 }
 
 /**
@@ -362,7 +410,10 @@ function parse_recipe_extraction($text) {
     $result = array(
         'title' => '',
         'ingredients' => '',
-        'method' => ''
+        'method' => '',
+        'servings' => '',
+        'notes' => '',
+        'language' => ''
     );
 
     $labels = get_recipe_label_variants();
@@ -370,6 +421,19 @@ function parse_recipe_extraction($text) {
     $ingredients_alt = build_recipe_label_alternation($labels['ingredients']);
     $method_alt = build_recipe_label_alternation($labels['method']);
     $notes_alt = build_recipe_label_alternation($labels['notes']);
+    $servings_alt = build_recipe_label_alternation($labels['servings']);
+
+    // Extract source language (extraction prompts only; label is never translated)
+    if (preg_match('/^\s*LANGUAGE\s*:[ \t]*(.+)$/mu', $text, $matches)) {
+        $result['language'] = normalize_recipe_language($matches[1]);
+    }
+
+    // Extract servings — only searched in the header, before INGREDIENTS, so a
+    // "Portions:" line inside the notes can't be mistaken for it
+    $header = preg_split('/\n\s*(?:' . $ingredients_alt . ')\s*:/iu', $text, 2)[0];
+    if (preg_match('/^\s*(?:' . $servings_alt . ')\s*:[ \t]*(.*)$/imu', $header, $matches)) {
+        $result['servings'] = trim($matches[1]);
+    }
 
     // Extract title
     if (preg_match('/(?:' . $title_alt . ')\s*:\s*(.+?)(?=\n|$)/iu', $text, $matches)) {
@@ -392,13 +456,30 @@ function parse_recipe_extraction($text) {
         $result['method'] = $method;
     }
 
+    // Extract notes (English or a recognized translated variant) — everything to the end
+    if (preg_match('/\n\s*(?:' . $notes_alt . ')\s*:[ \t]*(.*)$/isu', $text, $matches)) {
+        $result['notes'] = trim($matches[1]);
+    }
+
+    // "Leave blank" sometimes comes back as a placeholder instead of nothing
+    foreach (array('servings', 'notes') as $key) {
+        if (preg_match('/^[\[(]?\s*(?:none|n\/a|-+|blank|not stated)\s*[\])]?\.?$/iu', $result[$key])) {
+            $result[$key] = '';
+        }
+    }
+
     return $result;
 }
 
 /**
  * Translate extracted recipe text to any language using Claude API
+ *
+ * Callers should always pass the recipe's original (source-language) text, never
+ * an earlier translation, so translations don't stack. When $source_language is
+ * empty (e.g. a hand-typed recipe), the model is also asked to report it, and the
+ * result's data['source_language'] is filled in.
  */
-function translate_recipe_to_language($title, $ingredients, $method, $target_language = 'English', $notes = '') {
+function translate_recipe_to_language($title, $ingredients, $method, $target_language = 'English', $notes = '', $servings = '', $source_language = '') {
     // Get API key from wp-config.php
     if (!defined('ANTHROPIC_API_KEY') || ANTHROPIC_API_KEY === 'YOUR_KEY_GOES_HERE_WHEN_READY') {
         return array(
@@ -410,18 +491,27 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
     $api_key = ANTHROPIC_API_KEY;
     
     // Prepare the translation request
-    $text_to_translate = "TITLE: $title\n\nINGREDIENTS:\n$ingredients\n\nMETHOD:\n$method";
+    $text_to_translate = "TITLE: $title";
+    if (!empty($servings)) {
+        $text_to_translate .= "\nSERVINGS: $servings";
+    }
+    $text_to_translate .= "\n\nINGREDIENTS:\n$ingredients\n\nMETHOD:\n$method";
     if (!empty($notes)) {
         $text_to_translate .= "\n\nNOTES:\n$notes";
     }
-    
+
+    $source_instruction = '';
+    if (empty($source_language)) {
+        $source_instruction = "Before the translated recipe, add one line SOURCE_LANGUAGE: followed by the language the recipe below is written in, given as its English name — one of: " . implode(', ', get_recipe_language_names()) . " — or another English language name if none of these fit.\n\n";
+    }
+
     $request_body = array(
         'model' => ANTHROPIC_MODEL,
         'max_tokens' => 3000,
         'messages' => array(
             array(
                 'role' => 'user',
-                'content' => "Please translate this recipe to $target_language.\n\nIMPORTANT: The section labels TITLE:, INGREDIENTS:, METHOD:, and NOTES: (if present) must remain EXACTLY as written in English — do not translate these labels under any circumstances, even though you are translating everything else to $target_language. Only translate the content that follows each label.\n\nIf the recipe is already in $target_language, return it as-is. Preserve any [inferred] or [unclear] tags exactly as written, in English, do not translate them either.\n\n" . $text_to_translate
+                'content' => "Please translate this recipe to $target_language.\n\nIMPORTANT: The section labels SOURCE_LANGUAGE:, TITLE:, SERVINGS:, INGREDIENTS:, METHOD:, and NOTES: (if present) must remain EXACTLY as written in English — do not translate these labels under any circumstances, even though you are translating everything else to $target_language. Only translate the content that follows each label. Translate every section, including SERVINGS and NOTES.\n\n" . $source_instruction . "If the recipe is already in $target_language, return it as-is. Preserve any [inferred] or [unclear] tags exactly as written, in English, do not translate them either.\n\n" . $text_to_translate
             )
         )
     );
@@ -469,17 +559,23 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
     
     $translated_text = $data['content'][0]['text'];
     
-    // Parse the translated response
+    // Parse the translated response (notes and servings included)
     $parsed = parse_recipe_extraction($translated_text);
-    
-    // Extract notes if present (English or a recognized translated variant)
-    $notes_alt = build_recipe_label_alternation(get_recipe_label_variants()['notes']);
-    if (preg_match('/(?:' . $notes_alt . ')\s*:\s*\n(.+?)$/isu', $translated_text, $matches)) {
-        $parsed['notes'] = trim($matches[1]);
-    } else {
+    unset($parsed['language']);
+
+    // Never return a translated section the source didn't have
+    if (empty($notes)) {
         $parsed['notes'] = '';
     }
-    
+    if (empty($servings)) {
+        $parsed['servings'] = '';
+    }
+
+    $parsed['source_language'] = '';
+    if (empty($source_language) && preg_match('/^\s*SOURCE_LANGUAGE\s*:[ \t]*(.+)$/mu', $translated_text, $matches)) {
+        $parsed['source_language'] = normalize_recipe_language($matches[1]);
+    }
+
     return array(
         'success' => true,
         'data' => $parsed
@@ -504,22 +600,17 @@ function handle_recipe_translation() {
     $ingredients = isset($_POST['ingredients']) ? sanitize_textarea_field($_POST['ingredients']) : '';
     $method = isset($_POST['method']) ? sanitize_textarea_field($_POST['method']) : '';
     $notes = isset($_POST['notes']) ? sanitize_textarea_field($_POST['notes']) : '';
+    $servings = isset($_POST['servings']) ? sanitize_text_field($_POST['servings']) : '';
+    $source_language = isset($_POST['source_language']) ? normalize_recipe_language($_POST['source_language']) : '';
     $target_language = isset($_POST['target_language']) ? sanitize_text_field($_POST['target_language']) : 'English';
-    
+
     if (empty($title) && empty($ingredients) && empty($method)) {
         wp_send_json_error(array('message' => 'No text to translate'));
     }
-    
-    // Don't translate machine-generated notes (raw extractions) — pass empty string
-    $notes_to_translate = '';
-    if (!empty($notes) &&
-        strpos($notes, 'RAW EXTRACTION:') !== 0 &&
-        strpos($notes, 'ORIGINAL TEXT:') !== 0) {
-        $notes_to_translate = $notes;
-    }
-    
-    // Call translation function with target language
-    $result = translate_recipe_to_language($title, $ingredients, $method, $target_language, $notes_to_translate);
+
+    // The editor always sends the in-memory original, so every field (notes
+    // included) is translated as-is
+    $result = translate_recipe_to_language($title, $ingredients, $method, $target_language, $notes, $servings, $source_language);
     
     if ($result['success']) {
         wp_send_json_success(array(
@@ -597,23 +688,11 @@ function extract_recipe_via_claude($text_content, $interpretation_mode = false) 
 Your job:
 1. Extract what is clearly written (ingredients, quantities, steps).
 2. Where the recipe appears incomplete or a step is only hinted at, use culinary reasoning to fill in the gap — but TAG every inferred addition with [inferred].
-3. Translate non-English or non-Latin script content into English.
+3. Keep the source language. Do NOT translate anything; write any inferred additions in the source language too.
 4. Keep the original meaning and proportions; do not substitute ingredients.
-5. For the title: if no title is visible, create a short descriptive English title based on the main ingredient and cuisine style (e.g. "Gujarati Soybean Curry", "Spiced Chickpea Stew"). Never use "Untitled Recipe".
+5. For the title: if no title is visible, create a short descriptive title in the source language based on the main ingredient and cuisine style (e.g. "Gujarati Soybean Curry", "Spiced Chickpea Stew"). Never use "Untitled Recipe".
 
-Format your response EXACTLY like this:
-
-TITLE: [descriptive English title]
-
-INGREDIENTS:
-[ingredient 1]
-[ingredient 2]
-[etc.]
-
-METHOD:
-[step 1]
-[step 2]
-[etc.]
+' . get_recipe_extraction_format('[recipe title, or a descriptive title in the source language]') . '
 
 Example of tagging: "Simmer for 20 minutes [inferred] until chickpeas are tender [inferred]."
 
@@ -621,19 +700,9 @@ Here is the text:
 
 ' . $text_content;
     } else {
-        $prompt = 'Please extract the recipe from this text. Parse it into structured format:
+        $prompt = 'Please extract the recipe from this text. Parse it into structured format.
 
-TITLE: [recipe title or "Untitled Recipe" if not visible]
-
-INGREDIENTS:
-[ingredient 1]
-[ingredient 2]
-[etc.]
-
-METHOD:
-[step 1]
-[step 2]
-[etc.]
+' . get_recipe_extraction_format('[recipe title or "Untitled Recipe" if not visible]') . '
 
 Do NOT translate the text - keep it in the original language. Just extract and structure it.
 If any part is illegible or unclear, note it with [unclear] rather than guessing.
@@ -646,7 +715,7 @@ Here is the text:
     // Prepare the API request to extract recipe from text
     $request_body = array(
         'model' => ANTHROPIC_MODEL,
-        'max_tokens' => 2000,
+        'max_tokens' => 3000,
         'messages' => array(
             array(
                 'role' => 'user',

@@ -4,8 +4,17 @@
  *
  * Frontend recipe add/edit interface with featured image OCR and text import
  *
- * @version 2.2.1
+ * @version 2.3.0
  * @changelog
+ *   2.3.0 - Translation is form-only and always starts from the original. The original
+ *            field values (title, ingredients, method, notes, servings) are kept in JS;
+ *            translating back to original_lang restores them with no API call. Hidden
+ *            original_lang/view_lang inputs; normal Save writes _recipe_original_lang.
+ *            While a translation is shown, Save is replaced by "Save as new recipe",
+ *            which inserts a new recipe owned by the current user with the translated
+ *            fields as its original and _recipe_translated_from = source ID (shown as a
+ *            "Translated from #ID" link). Imports fill a real source-language NOTES
+ *            section; the raw extraction is shown only in a collapsible preview.
  *   2.2.1 - delete_recipe AJAX handler moved to recipe-image-upload-handler.php (this file
  *            only loads when the editor page renders, so admin-ajax.php never had the handler
  *            and returned "0"). Delete button now reads the JSON reply and alerts on failure
@@ -132,7 +141,28 @@ if ($is_editing) {
     $recipe_ingredients = html_to_plain_text($recipe_ingredients, false);
     $recipe_method = html_to_plain_text($recipe_method, true);
     $recipe_notes = html_to_plain_text($recipe_notes, false);
-    
+
+    // The stored recipe is always the original; translation only ever happens in the form
+    $recipe_original_lang = get_post_meta($recipe_id, '_recipe_original_lang', true);
+    $recipe_view_lang = $recipe_original_lang;
+    $recipe_original_fields = array(
+        'title' => $recipe_title,
+        'ingredients' => $recipe_ingredients,
+        'method' => $recipe_method,
+        'notes' => $recipe_notes,
+        'servings' => $recipe_servings,
+    );
+
+    // Recipe saved via "Save as new recipe" from a translated view of another one
+    $translated_from_post = null;
+    $translated_from_id = intval(get_post_meta($recipe_id, '_recipe_translated_from', true));
+    if ($translated_from_id > 0) {
+        $translated_from_post = get_post($translated_from_id);
+        if (!$translated_from_post || $translated_from_post->post_type !== 'recipe' || $translated_from_post->post_status === 'trash') {
+            $translated_from_post = null;
+        }
+    }
+
     $recipe_categories_objs = get_recipe_categories($recipe_id);
     $recipe_category = array_map(function($cat) { return $cat->cat_id; }, $recipe_categories_objs);
 
@@ -153,12 +183,26 @@ if ($is_editing) {
     $featured_image_id = 0;
     $featured_image_url = '';
     $attached_product_ids = array();
+    $recipe_original_lang = '';
+    $recipe_view_lang = '';
+    $recipe_original_fields = null;
+    $translated_from_post = null;
 }
 
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
+// Handle form submission. "Save as new recipe" is the only save offered while the
+// form shows a translation, so the stored original is never overwritten by one.
+$is_save_as_new = isset($_POST['save_as_new_recipe']);
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_recipe']) || $is_save_as_new)) {
     check_admin_referer('save_recipe_' . $recipe_id);
-    
+
+    // The stored language wins; the form's value only fills it in when unknown
+    // (hand-typed recipe whose language was detected on first translation)
+    $posted_original_lang = isset($_POST['original_lang']) ? normalize_recipe_language($_POST['original_lang']) : '';
+    $view_lang = isset($_POST['view_lang']) ? normalize_recipe_language($_POST['view_lang']) : '';
+    $stored_original_lang = $is_editing ? get_post_meta($recipe_id, '_recipe_original_lang', true) : '';
+    $original_lang = $stored_original_lang !== '' ? $stored_original_lang : $posted_original_lang;
+    $is_translated_view = ($view_lang !== '' && ($original_lang === '' || strcasecmp($view_lang, $original_lang) !== 0));
+
     $title = sanitize_text_field($_POST['recipe_title']);
     $ingredients = sanitize_textarea_field($_POST['recipe_ingredients']);
     $method = sanitize_textarea_field($_POST['recipe_method']);
@@ -186,15 +230,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
     if (empty($categories)) {
         $errors[] = 'Please select at least one category.';
     }
-    
+    if ($is_save_as_new && !$is_translated_view) {
+        $errors[] = '"Save as new recipe" is only available while the recipe is shown in a translated language.';
+    } elseif (!$is_save_as_new && $is_translated_view) {
+        $errors[] = 'This recipe is shown translated into ' . $view_lang . ($original_lang !== '' ? ', but it was written in ' . $original_lang : '') . '. Use "Save as new recipe", or translate it back to its original language before saving.';
+    }
+
     if (empty($errors)) {
         $post_data = array(
             'post_title' => $title,
             'post_type' => 'recipe',
             'post_status' => 'publish',
         );
-        
-        if ($is_editing) {
+
+        if ($is_save_as_new) {
+            // Always a new post owned by the current user, even when editing someone
+            // else's recipe via collection-editor access
+            $post_data['post_author'] = get_current_user_id();
+            $saved_id = wp_insert_post($post_data);
+
+            // Category IDs in the form belong to the source recipe's owner; map them
+            // by name onto the current user's own categories, as copy_recipe_to_user() does
+            if ($is_editing) {
+                $own_categories = array();
+                foreach ($categories as $cat_id) {
+                    $cat = get_category_by_id($cat_id);
+                    if (!$cat) {
+                        continue;
+                    }
+                    $own_categories[] = ($cat->user_id == get_current_user_id())
+                        ? (int) $cat->cat_id
+                        : get_or_create_user_category(get_current_user_id(), $cat->cat_name, $cat->category_type);
+                }
+                $categories = array_values(array_unique(array_filter($own_categories)));
+            }
+        } elseif ($is_editing) {
             $post_data['ID'] = $recipe_id;
             $saved_id = wp_update_post($post_data);
         } else {
@@ -207,16 +277,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
             update_post_meta($saved_id, '_recipe_method', $method);
             update_post_meta($saved_id, '_recipe_notes', $notes);
             update_post_meta($saved_id, '_recipe_servings', $servings);
-            
+
+            // The saved fields are this recipe's original, in the language they're shown in
+            $saved_lang = $is_save_as_new ? $view_lang : $original_lang;
+            if ($saved_lang !== '') {
+                update_post_meta($saved_id, '_recipe_original_lang', $saved_lang);
+            }
+            if ($is_save_as_new && $is_editing) {
+                update_post_meta($saved_id, '_recipe_translated_from', $recipe_id);
+            }
+
             // Set featured image if one was uploaded
             if ($new_featured_image_id > 0) {
                 set_post_thumbnail($saved_id, $new_featured_image_id);
-                
-                // Also update the attachment's post parent to link it to this recipe
-                wp_update_post(array(
-                    'ID' => $new_featured_image_id,
-                    'post_parent' => $saved_id
-                ));
+
+                // Also update the attachment's post parent to link it to this recipe.
+                // Not for a translated copy: the image is shared with the source recipe,
+                // which keeps it as its own.
+                if (!($is_save_as_new && $is_editing)) {
+                    wp_update_post(array(
+                        'ID' => $new_featured_image_id,
+                        'post_parent' => $saved_id
+                    ));
+                }
             }
             
             if (!empty($categories)) {
@@ -293,6 +376,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
         $recipe_notes = $notes;
         $recipe_servings = $servings;
         $recipe_category = $categories;
+
+        // Keep showing the posted view language. When editing, the stored recipe
+        // is still the in-memory original; a new recipe has no stored original, so
+        // the posted fields become the original, in the language they're shown in.
+        $recipe_view_lang = $view_lang;
+        if ($is_editing) {
+            $recipe_original_lang = $original_lang;
+        } else {
+            $recipe_original_lang = $view_lang !== '' ? $view_lang : $original_lang;
+        }
     }
 }
 ?>
@@ -309,6 +402,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
     </div>
     <?php endif; ?>
     
+    <?php if ($translated_from_post): ?>
+    <div style="background: #f0f8ff; border: 1px solid #2271b1; border-radius: 4px; padding: 10px 15px; margin: 20px 0; font-size: 14px; color: #333;">
+        🌐 <a href="<?php echo esc_url(home_url('/recipe-view-page/?ids=' . $translated_from_post->ID)); ?>" title="<?php echo esc_attr($translated_from_post->post_title); ?>">Translated from #<?php echo intval($translated_from_post->ID); ?></a>
+    </div>
+    <?php endif; ?>
+
     <?php if (isset($_GET['promoted'])): ?>
     <div style="background: #d1ecf1; padding: 15px; margin: 20px 0; border: 1px solid #bee5eb; color: #0c5460; border-radius: 4px;">
         🎉 <strong>Congratulations!</strong> You are now an <strong>author</strong> and can create and manage your own recipe collection!
@@ -371,6 +470,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_recipe'])) {
                 </div>
                 
                 <div id="uploadStatus" class="upload-status" style="display: none;"></div>
+
+                <details id="imageRawPreview" class="raw-preview" style="display: none;">
+                    <summary>Show raw extraction</summary>
+                    <pre></pre>
+                </details>
                 
                 <?php if ($featured_image_url): ?>
                 <div class="image-preview" style="display: block;">
@@ -466,6 +570,11 @@ Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocol
                 </button>
                 
                 <div id="textStatus" class="upload-status" style="display: none; margin-top: 15px;"></div>
+
+                <details id="textRawPreview" class="raw-preview" style="display: none;">
+                    <summary>Show raw extraction</summary>
+                    <pre></pre>
+                </details>
             </div>
         </div>
     </div>
@@ -480,6 +589,8 @@ Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocol
     <form method="post" class="editor-form" id="recipeForm">
         <?php wp_nonce_field('save_recipe_' . $recipe_id); ?>
         <input type="hidden" name="featured_image_id" id="featuredImageId" value="<?php echo $featured_image_id; ?>" />
+        <input type="hidden" name="original_lang" id="originalLang" value="<?php echo esc_attr($recipe_original_lang); ?>" />
+        <input type="hidden" name="view_lang" id="viewLang" value="<?php echo esc_attr($recipe_view_lang); ?>" />
         
         <div class="form-group">
             <label for="recipe_title">
@@ -642,8 +753,12 @@ Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocol
         </div>
         
         <div class="form-actions">
-            <button type="submit" name="save_recipe" class="btn btn-primary">
+            <button type="submit" name="save_recipe" id="saveRecipeBtn" class="btn btn-primary">
                 💾 <?php echo $is_editing ? 'Update Recipe' : 'Save Recipe'; ?>
+            </button>
+            <!-- Shown instead of the button above while the form shows a translation -->
+            <button type="submit" name="save_as_new_recipe" id="saveAsNewBtn" class="btn btn-primary" style="display: none;" disabled>
+                💾 Save as new recipe
             </button>
             
             <a href="<?php echo esc_url($back_url); ?>" class="btn btn-secondary">
@@ -752,9 +867,253 @@ Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocol
     opacity: 0.5;
     cursor: default;
 }
+
+.raw-preview {
+    margin-top: 10px;
+    font-size: 13px;
+    color: #555;
+}
+
+.raw-preview summary {
+    cursor: pointer;
+}
+
+.raw-preview pre {
+    white-space: pre-wrap;
+    background: #f7f7f7;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+}
 </style>
 
 <script>
+// Translation is form-only: the stored recipe is always the original. Its field
+// values are kept here so every translation starts from them (translations never
+// stack), and translating back to the original language restores them with no
+// API call. Edits made while the original language is shown update this copy.
+const RECIPE_FIELD_IDS = {
+    title: 'recipe_title',
+    ingredients: 'recipe_ingredients',
+    method: 'recipe_method',
+    notes: 'recipe_notes',
+    servings: 'recipe_servings'
+};
+let recipeOriginal = <?php echo $recipe_original_fields ? wp_json_encode($recipe_original_fields, JSON_HEX_TAG | JSON_HEX_AMP) : 'null'; ?>;
+
+const RECIPE_LANGUAGE_OPTIONS = `
+    <option value="English">🇬🇧 English</option>
+    <option value="French">🇫🇷 French</option>
+    <option value="Spanish">🇪🇸 Spanish</option>
+    <option value="Italian">🇮🇹 Italian</option>
+    <option value="German">🇩🇪 German</option>
+    <option value="Portuguese">🇵🇹 Portuguese</option>
+    <option value="Gujarati">🇮🇳 Gujarati</option>
+    <option value="Hindi">🇮🇳 Hindi</option>
+    <option value="Mandarin Chinese">🇨🇳 Mandarin</option>
+    <option value="Japanese">🇯🇵 Japanese</option>
+    <option value="Korean">🇰🇷 Korean</option>
+    <option value="Arabic">🇸🇦 Arabic</option>
+    <option value="Russian">🇷🇺 Russian</option>
+    <option value="Dutch">🇳🇱 Dutch</option>
+    <option value="Polish">🇵🇱 Polish</option>
+    <option value="Turkish">🇹🇷 Turkish</option>
+    <option value="Vietnamese">🇻🇳 Vietnamese</option>
+    <option value="Thai">🇹🇭 Thai</option>
+`;
+
+function readRecipeFields() {
+    const fields = {};
+    for (const key in RECIPE_FIELD_IDS) {
+        fields[key] = document.getElementById(RECIPE_FIELD_IDS[key]).value;
+    }
+    return fields;
+}
+
+function writeRecipeFields(fields) {
+    for (const key in RECIPE_FIELD_IDS) {
+        document.getElementById(RECIPE_FIELD_IDS[key]).value = fields[key] || '';
+    }
+}
+
+function getOriginalLang() {
+    return document.getElementById('originalLang').value;
+}
+
+function setOriginalLang(lang) {
+    document.getElementById('originalLang').value = lang;
+}
+
+function getViewLang() {
+    return document.getElementById('viewLang').value;
+}
+
+function setViewLang(lang) {
+    document.getElementById('viewLang').value = lang;
+    updateSaveButtons();
+}
+
+function sameLang(a, b) {
+    return a.toLowerCase() === b.toLowerCase();
+}
+
+// No view language yet means nothing has been translated, so the form shows the original
+function isViewingOriginal() {
+    const viewLang = getViewLang();
+    const originalLang = getOriginalLang();
+    return viewLang === '' || (originalLang !== '' && sameLang(viewLang, originalLang));
+}
+
+// A translated view can only be saved as a new recipe, never over the original
+function updateSaveButtons() {
+    const viewingOriginal = isViewingOriginal();
+    const saveBtn = document.getElementById('saveRecipeBtn');
+    const saveAsNewBtn = document.getElementById('saveAsNewBtn');
+
+    saveBtn.style.display = viewingOriginal ? '' : 'none';
+    saveBtn.disabled = !viewingOriginal;
+    saveAsNewBtn.style.display = viewingOriginal ? 'none' : '';
+    saveAsNewBtn.disabled = viewingOriginal;
+}
+
+function showRawPreview(previewId, rawText) {
+    const preview = document.getElementById(previewId);
+    preview.querySelector('pre').textContent = rawText || '';
+    preview.style.display = rawText ? 'block' : 'none';
+}
+
+// Fill the form from an extraction result. The fields are stored as written, in
+// the source language, and become the new in-memory original.
+function applyImportedRecipe(extracted, previewId, rawText) {
+    if (extracted.title) {
+        document.getElementById('recipe_title').value = extracted.title;
+    }
+    if (extracted.ingredients) {
+        document.getElementById('recipe_ingredients').value = extracted.ingredients;
+    }
+    if (extracted.method) {
+        document.getElementById('recipe_method').value = extracted.method;
+    }
+    if (extracted.servings) {
+        document.getElementById('recipe_servings').value = extracted.servings;
+    }
+    document.getElementById('recipe_notes').value = extracted.notes || '';
+
+    showRawPreview(previewId, rawText);
+
+    recipeOriginal = readRecipeFields();
+    setOriginalLang(extracted.language || '');
+    setViewLang(extracted.language || '');
+}
+
+// Translate the form to targetLang, always from the in-memory original
+function translateFromOriginal(targetLang, statusDiv, translateBtn, idleLabel) {
+    if (!recipeOriginal) {
+        recipeOriginal = readRecipeFields();
+    }
+    const original = recipeOriginal;
+    const originalLang = getOriginalLang();
+
+    statusDiv.style.display = 'block';
+
+    if (originalLang && sameLang(targetLang, originalLang)) {
+        writeRecipeFields(original);
+        setViewLang(originalLang);
+        statusDiv.className = 'upload-status success';
+        statusDiv.textContent = '✅ Showing the original recipe (' + originalLang + ').';
+        return;
+    }
+
+    translateBtn.disabled = true;
+    translateBtn.textContent = '🔄 Translating...';
+
+    const formData = new FormData();
+    formData.append('action', 'translate_recipe');
+    formData.append('nonce', '<?php echo wp_create_nonce('recipe_translation'); ?>');
+    formData.append('title', original.title);
+    formData.append('ingredients', original.ingredients);
+    formData.append('method', original.method);
+    formData.append('notes', original.notes);
+    formData.append('servings', original.servings);
+    formData.append('source_language', originalLang);
+    formData.append('target_language', targetLang);
+
+    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        translateBtn.disabled = false;
+        translateBtn.textContent = idleLabel;
+
+        if (!data.success) {
+            statusDiv.className = 'upload-status error';
+            statusDiv.textContent = '❌ Translation failed: ' + (data.data ? data.data.message : 'Unknown error');
+            return;
+        }
+
+        const translated = data.data.translated_data;
+
+        // Hand-typed recipe: the server reports the language it was written in
+        if (!getOriginalLang() && translated.source_language) {
+            setOriginalLang(translated.source_language);
+        }
+
+        if (getOriginalLang() && sameLang(targetLang, getOriginalLang())) {
+            writeRecipeFields(original);
+            setViewLang(getOriginalLang());
+            statusDiv.className = 'upload-status success';
+            statusDiv.textContent = '✅ This recipe is already in ' + getOriginalLang() + ' — showing the original.';
+            return;
+        }
+
+        // Never show a mix of languages: every field the original has must come back
+        const missing = Object.keys(RECIPE_FIELD_IDS).filter(function(key) {
+            return (original[key] || '').trim() !== '' && (translated[key] || '').trim() === '';
+        });
+        if (missing.length) {
+            statusDiv.className = 'upload-status error';
+            statusDiv.textContent = '❌ Translation came back incomplete (missing: ' + missing.join(', ') + '). Nothing was changed.';
+            return;
+        }
+
+        writeRecipeFields({
+            title: translated.title,
+            ingredients: translated.ingredients,
+            method: (translated.method || '').replace(/\.\s+/g, '.\n').trim(),
+            notes: translated.notes,
+            servings: translated.servings
+        });
+        setViewLang(targetLang);
+
+        statusDiv.className = 'upload-status success';
+        statusDiv.textContent = '✅ Recipe translated to ' + targetLang + (getOriginalLang() ? ' from the ' + getOriginalLang() + ' original' : '') + '. Save it as a new recipe to keep this translation.';
+    })
+    .catch(error => {
+        statusDiv.className = 'upload-status error';
+        statusDiv.textContent = '❌ Translation failed: ' + error.message;
+        translateBtn.disabled = false;
+        translateBtn.textContent = idleLabel;
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (!recipeOriginal) {
+        recipeOriginal = readRecipeFields();
+    }
+    for (const key in RECIPE_FIELD_IDS) {
+        document.getElementById(RECIPE_FIELD_IDS[key]).addEventListener('input', function() {
+            if (isViewingOriginal()) {
+                recipeOriginal = readRecipeFields();
+            }
+        });
+    }
+    updateSaveButtons();
+});
+
 // Allergen Checker v2: filter the attached-products checklist by search text
 function filterAttachedProductPicker() {
     const searchTerm = document.getElementById('productSearchInput').value.toLowerCase().trim();
@@ -860,17 +1219,7 @@ document.getElementById('extractBtn').addEventListener('click', function() {
                     ? '✅ Image uploaded and recipe interpreted! Content tagged [inferred] was added by AI — review carefully.'
                     : '✅ Image uploaded and recipe extracted! Check the fields below.';
                 
-                if (data.data.extracted_data.title) {
-                    document.getElementById('recipe_title').value = data.data.extracted_data.title;
-                }
-                if (data.data.extracted_data.ingredients) {
-                    document.getElementById('recipe_ingredients').value = data.data.extracted_data.ingredients;
-                }
-                if (data.data.extracted_data.method) {
-                    document.getElementById('recipe_method').value = data.data.extracted_data.method;
-                }
-
-                document.getElementById('recipe_notes').value = 'RAW EXTRACTION:\n\n' + data.data.raw_response;
+                applyImportedRecipe(data.data.extracted_data, 'imageRawPreview', data.data.raw_response);
 
                 showTranslateButton();
             }
@@ -1088,22 +1437,13 @@ function extractFromText() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            if (data.data.extracted_data.title) {
-                document.getElementById('recipe_title').value = data.data.extracted_data.title;
-            }
-            if (data.data.extracted_data.ingredients) {
-                document.getElementById('recipe_ingredients').value = data.data.extracted_data.ingredients;
-            }
-            if (data.data.extracted_data.method) {
-                document.getElementById('recipe_method').value = data.data.extracted_data.method;
-            }
+            applyImportedRecipe(data.data.extracted_data, 'textRawPreview', data.data.raw_response);
             
             statusDiv.className = 'upload-status success';
             statusDiv.textContent = interpretMode === '1'
                 ? '✅ Recipe interpreted! Content tagged [inferred] was added by AI — review carefully.'
                 : '✅ Recipe extracted from text! Check the fields below.';
-            
-            document.getElementById('recipe_notes').value = 'ORIGINAL TEXT:\n\n' + textContent;
+
 
             showTranslateButton();
         } else {
@@ -1139,26 +1479,7 @@ function showTranslateButton() {
     langSelect.id = 'targetLanguage';
     langSelect.className = 'upload-btn';
     langSelect.style.padding = '8px 12px';
-    langSelect.innerHTML = `
-        <option value="English">🇬🇧 English</option>
-        <option value="French">🇫🇷 French</option>
-        <option value="Spanish">🇪🇸 Spanish</option>
-        <option value="Italian">🇮🇹 Italian</option>
-        <option value="German">🇩🇪 German</option>
-        <option value="Portuguese">🇵🇹 Portuguese</option>
-        <option value="Gujarati">🇮🇳 Gujarati</option>
-        <option value="Hindi">🇮🇳 Hindi</option>
-        <option value="Mandarin Chinese">🇨🇳 Mandarin</option>
-        <option value="Japanese">🇯🇵 Japanese</option>
-        <option value="Korean">🇰🇷 Korean</option>
-        <option value="Arabic">🇸🇦 Arabic</option>
-        <option value="Russian">🇷🇺 Russian</option>
-        <option value="Dutch">🇳🇱 Dutch</option>
-        <option value="Polish">🇵🇱 Polish</option>
-        <option value="Turkish">🇹🇷 Turkish</option>
-        <option value="Vietnamese">🇻🇳 Vietnamese</option>
-        <option value="Thai">🇹🇭 Thai</option>
-    `;
+    langSelect.innerHTML = RECIPE_LANGUAGE_OPTIONS;
     
     const translateBtn = document.createElement('button');
     translateBtn.type = 'button';
@@ -1173,77 +1494,19 @@ function showTranslateButton() {
     statusDiv.parentNode.insertBefore(translateContainer, statusDiv.nextSibling);
 }
 
-// Translate the extracted recipe to selected language
+// Translate the extracted recipe to selected language. The selector stays in
+// place afterwards so the recipe can be translated again or back to the original.
 function translateRecipe() {
-    const translateBtn = document.getElementById('translateBtn');
-    const targetLang = document.getElementById('targetLanguage').value;
-    
     const imageStatus = document.getElementById('uploadStatus');
     const textStatus = document.getElementById('textStatus');
     const statusDiv = imageStatus.style.display !== 'none' ? imageStatus : textStatus;
-    
-    translateBtn.disabled = true;
-    translateBtn.textContent = '🔄 Translating...';
-    
-    const title = document.getElementById('recipe_title').value;
-    const ingredients = document.getElementById('recipe_ingredients').value;
-    const method = document.getElementById('recipe_method').value;
-    const notes = document.getElementById('recipe_notes').value;
-    
-    const formData = new FormData();
-    formData.append('action', 'translate_recipe');
-    formData.append('nonce', '<?php echo wp_create_nonce('recipe_translation'); ?>');
-    formData.append('title', title);
-    formData.append('ingredients', ingredients);
-    formData.append('method', method);
-    formData.append('notes', notes);
-    formData.append('target_language', targetLang);
-    
-    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (data.data.translated_data.title) {
-                document.getElementById('recipe_title').value = data.data.translated_data.title;
-            }
-            if (data.data.translated_data.ingredients) {
-                document.getElementById('recipe_ingredients').value = data.data.translated_data.ingredients;
-            }
-            if (data.data.translated_data.method) {
-                let method = data.data.translated_data.method;
-                method = method.replace(/\.\s+/g, '.\n');
-                document.getElementById('recipe_method').value = method.trim();
-            }
-            if (data.data.translated_data.notes) {
-                const originalNotes = document.getElementById('recipe_notes').value;
-                const translatedNotes = data.data.translated_data.notes;
-                // If original notes are machine-generated, replace rather than prepend
-                const isMachineNotes = originalNotes.startsWith('RAW EXTRACTION:') || originalNotes.startsWith('ORIGINAL TEXT:');
-                document.getElementById('recipe_notes').value = isMachineNotes
-                    ? originalNotes
-                    : translatedNotes + '\n\n--- Original Notes ---\n\n' + originalNotes;
-            }
-            
-            statusDiv.className = 'upload-status success';
-            statusDiv.textContent = '✅ Recipe translated to ' + targetLang + '!';
-            
-            document.getElementById('translateContainer').remove();
-        } else {
-            statusDiv.className = 'upload-status error';
-            statusDiv.textContent = '❌ Translation failed: ' + (data.data ? data.data.message : 'Unknown error');
-            translateBtn.disabled = false;
-            translateBtn.textContent = '🌐 Translate';
-        }
-    })
-    .catch(error => {
-        statusDiv.className = 'upload-status error';
-        statusDiv.textContent = '❌ Translation failed: ' + error.message;
-        translateBtn.disabled = false;
-        translateBtn.textContent = '🌐 Translate';
-    });
+
+    translateFromOriginal(
+        document.getElementById('targetLanguage').value,
+        statusDiv,
+        document.getElementById('translateBtn'),
+        '🌐 Translate'
+    );
 }
 
 <?php if ($is_editing): ?>
@@ -1277,97 +1540,19 @@ document.addEventListener('DOMContentLoaded', function() {
             langSelect.id = 'editTargetLanguage';
             langSelect.className = 'upload-btn';
             langSelect.style.padding = '8px 12px';
-            langSelect.innerHTML = `
-                <option value="English">🇬🇧 English</option>
-                <option value="French">🇫🇷 French</option>
-                <option value="Spanish">🇪🇸 Spanish</option>
-                <option value="Italian">🇮🇹 Italian</option>
-                <option value="German">🇩🇪 German</option>
-                <option value="Portuguese">🇵🇹 Portuguese</option>
-                <option value="Gujarati">🇮🇳 Gujarati</option>
-                <option value="Hindi">🇮🇳 Hindi</option>
-                <option value="Mandarin Chinese">🇨🇳 Mandarin</option>
-                <option value="Japanese">🇯🇵 Japanese</option>
-                <option value="Korean">🇰🇷 Korean</option>
-                <option value="Arabic">🇸🇦 Arabic</option>
-                <option value="Russian">🇷🇺 Russian</option>
-                <option value="Dutch">🇳🇱 Dutch</option>
-                <option value="Polish">🇵🇱 Polish</option>
-                <option value="Turkish">🇹🇷 Turkish</option>
-                <option value="Vietnamese">🇻🇳 Vietnamese</option>
-                <option value="Thai">🇹🇭 Thai</option>
-            `;
+            langSelect.innerHTML = RECIPE_LANGUAGE_OPTIONS;
             
             const translateBtn = document.createElement('button');
             translateBtn.type = 'button';
             translateBtn.className = 'upload-btn';
             translateBtn.textContent = '🌐 Translate Recipe';
             translateBtn.onclick = function() {
-                const statusDiv = document.getElementById('editTranslateStatus');
-                statusDiv.style.display = 'block';
-                
-                const targetLang = document.getElementById('editTargetLanguage').value;
-                const title = document.getElementById('recipe_title').value;
-                const ingredients = document.getElementById('recipe_ingredients').value;
-                const method = document.getElementById('recipe_method').value;
-                const notes = document.getElementById('recipe_notes').value;
-                
-                translateBtn.disabled = true;
-                translateBtn.textContent = '🔄 Translating...';
-                
-                const formData = new FormData();
-                formData.append('action', 'translate_recipe');
-                formData.append('nonce', '<?php echo wp_create_nonce('recipe_translation'); ?>');
-                formData.append('title', title);
-                formData.append('ingredients', ingredients);
-                formData.append('method', method);
-                formData.append('notes', notes);
-                formData.append('target_language', targetLang);
-                
-                fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        if (data.data.translated_data.title) {
-                            document.getElementById('recipe_title').value = data.data.translated_data.title;
-                        }
-                        if (data.data.translated_data.ingredients) {
-                            document.getElementById('recipe_ingredients').value = data.data.translated_data.ingredients;
-                        }
-                        if (data.data.translated_data.method) {
-                            let method = data.data.translated_data.method;
-                            method = method.replace(/\.\s+/g, '.\n');
-                            document.getElementById('recipe_method').value = method.trim();
-                        }
-                        if (data.data.translated_data.notes) {
-                            const originalNotes = document.getElementById('recipe_notes').value;
-                            const translatedNotes = data.data.translated_data.notes;
-                            const isMachineNotes = originalNotes.startsWith('RAW EXTRACTION:') || originalNotes.startsWith('ORIGINAL TEXT:');
-                            document.getElementById('recipe_notes').value = isMachineNotes
-                                ? originalNotes
-                                : translatedNotes + '\n\n--- Original Notes ---\n\n' + originalNotes;
-                        }
-                        
-                        statusDiv.className = 'upload-status success';
-                        statusDiv.textContent = '✅ Recipe translated to ' + targetLang + '!';
-                        translateBtn.disabled = false;
-                        translateBtn.textContent = '🌐 Translate Recipe';
-                    } else {
-                        statusDiv.className = 'upload-status error';
-                        statusDiv.textContent = '❌ Translation failed: ' + (data.data ? data.data.message : 'Unknown error');
-                        translateBtn.disabled = false;
-                        translateBtn.textContent = '🌐 Translate Recipe';
-                    }
-                })
-                .catch(error => {
-                    statusDiv.className = 'upload-status error';
-                    statusDiv.textContent = '❌ Translation failed: ' + error.message;
-                    translateBtn.disabled = false;
-                    translateBtn.textContent = '🌐 Translate Recipe';
-                });
+                translateFromOriginal(
+                    langSelect.value,
+                    document.getElementById('editTranslateStatus'),
+                    translateBtn,
+                    '🌐 Translate Recipe'
+                );
             };
             
             translateContainer.appendChild(langSelect);
