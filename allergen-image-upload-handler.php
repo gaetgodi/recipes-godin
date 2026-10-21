@@ -36,6 +36,12 @@ function handle_allergen_product_image_upload() {
         wp_send_json_error(array('message' => 'No image file provided'));
     }
 
+    // Reject files over the scan limit before they are stored
+    $size_error = scan_upload_size_error($_FILES['product_image']);
+    if ($size_error) {
+        wp_send_json_error(array('message' => $size_error));
+    }
+
     require_once(ABSPATH . 'wp-admin/includes/image.php');
     require_once(ABSPATH . 'wp-admin/includes/file.php');
     require_once(ABSPATH . 'wp-admin/includes/media.php');
@@ -50,13 +56,17 @@ function handle_allergen_product_image_upload() {
     $image_url = wp_get_attachment_url($attachment_id);
     $image_path = get_attached_file($attachment_id);
 
-    $image_data = file_get_contents($image_path);
-    $base64_image = base64_encode($image_data);
+    // Resizes a temporary copy if the image is too large for the API
+    $prepared = prepare_scan_image_for_api($image_path);
+    if (!$prepared['success']) {
+        wp_send_json_error(array(
+            'message' => $prepared['error'],
+            'attachment_id' => $attachment_id,
+            'image_url' => $image_url,
+        ));
+    }
 
-    $image_type = wp_check_filetype($image_path);
-    $mime_type = $image_type['type'];
-
-    $extraction_result = extract_product_from_image($base64_image, $mime_type);
+    $extraction_result = extract_product_from_image($prepared['base64'], $prepared['mime_type']);
 
     if ($extraction_result['success']) {
         wp_send_json_success(array(

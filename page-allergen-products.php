@@ -491,6 +491,7 @@ $products = get_user_products($current_user_id);
     </table>
 </div>
 
+<script src="<?php echo get_stylesheet_directory_uri(); ?>/scan-image-resize.js"></script>
 <script>
 function editProduct(productId) {
     document.getElementById('view-' + productId).style.display = 'none';
@@ -504,25 +505,29 @@ function cancelEditProduct(productId) {
 
 let selectedProductImage = null;
 
-document.getElementById('productImageFile').addEventListener('change', function(e) {
+document.getElementById('productImageFile').addEventListener('change', async function(e) {
     const file = e.target.files[0];
+    selectedProductImage = null;
     if (!file) return;
 
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-        alert('Please upload a valid image file (JPG, PNG, GIF, or WebP)');
+    // Type and 20 MB limit are checked on the original, before any resizing
+    const validationError = validateScanFile(file);
+    if (validationError) {
+        alert(validationError);
         this.value = '';
         return;
     }
 
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-        alert('Image is too large! Please use an image smaller than 5 MB.\n\nCurrent size: ' + (file.size / 1024 / 1024).toFixed(2) + ' MB');
+    // Downsize to 2000 px (JPEG) in the browser before upload
+    const scanBtn = document.getElementById('scanProductBtn');
+    scanBtn.disabled = true;
+    try {
+        selectedProductImage = await prepareScanFile(file);
+    } catch (error) {
+        alert(error.message);
         this.value = '';
-        return;
     }
-
-    selectedProductImage = file;
+    scanBtn.disabled = false;
 });
 
 document.getElementById('scanProductBtn').addEventListener('click', function() {

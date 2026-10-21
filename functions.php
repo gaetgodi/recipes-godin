@@ -286,6 +286,9 @@ function enqueue_recipe_page_styles() {
 }
 add_action('wp_enqueue_scripts', 'enqueue_recipe_page_styles');
 
+// Shared scan-upload size limit and API image preparation (recipe scan + allergen label OCR)
+require_once(get_stylesheet_directory() . '/scan-image-functions.php');
+
 // Load recipe image upload handler for AJAX
 require_once(get_stylesheet_directory() . '/recipe-image-upload-handler.php');
 require_once(get_stylesheet_directory() . '/recipe-model-health-check.php');

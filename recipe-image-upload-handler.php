@@ -111,7 +111,13 @@ function handle_recipe_image_upload() {
     if (empty($_FILES['recipe_image'])) {
         wp_send_json_error(array('message' => 'No image file provided'));
     }
-    
+
+    // Reject files over the scan limit before they are stored
+    $size_error = scan_upload_size_error($_FILES['recipe_image']);
+    if ($size_error) {
+        wp_send_json_error(array('message' => $size_error));
+    }
+
     // Get recipe ID if editing existing recipe
     $recipe_id = isset($_POST['recipe_id']) ? intval($_POST['recipe_id']) : 0;
 
@@ -133,16 +139,18 @@ function handle_recipe_image_upload() {
     $image_url = wp_get_attachment_url($attachment_id);
     $image_path = get_attached_file($attachment_id);
     
-    // Convert image to base64 for Claude API
-    $image_data = file_get_contents($image_path);
-    $base64_image = base64_encode($image_data);
-    
-    // Determine image type
-    $image_type = wp_check_filetype($image_path);
-    $mime_type = $image_type['type'];
-    
+    // Convert image to base64 for Claude API (resizes a temporary copy if too large for the API)
+    $prepared = prepare_scan_image_for_api($image_path);
+    if (!$prepared['success']) {
+        wp_send_json_error(array(
+            'message' => $prepared['error'],
+            'attachment_id' => $attachment_id,
+            'image_url' => $image_url
+        ));
+    }
+
     // Call Claude API for OCR
-    $extraction_result = extract_recipe_from_image($base64_image, $mime_type, $interpretation_mode);
+    $extraction_result = extract_recipe_from_image($prepared['base64'], $prepared['mime_type'], $interpretation_mode);
     
     if ($extraction_result['success']) {
         // Set as featured image if recipe ID provided

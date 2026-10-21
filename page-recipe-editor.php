@@ -443,7 +443,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_recipe']) || $i
                 <p>Upload a photo of your recipe (handwritten recipe cards will be automatically extracted!)</p>
                 <p style="font-size: 13px; color: #666; margin-top: 5px;">
                     <strong>Accepted formats:</strong> JPG, PNG, GIF, WebP<br>
-                    <strong>Maximum file size:</strong> 5 MB
+                    <strong>Maximum file size:</strong> 20 MB
                 </p>
                 
                 <input type="file" id="recipeImageFile" accept="image/*" style="display: none;" />
@@ -889,6 +889,7 @@ Preheat oven to 350°F. Mix dry ingredients. Add wet ingredients. Fold in chocol
 }
 </style>
 
+<script src="<?php echo get_stylesheet_directory_uri(); ?>/scan-image-resize.js"></script>
 <script>
 // Translation is form-only: the stored recipe is always the original. Its field
 // values are kept here so every translation starts from them (translations never
@@ -1144,26 +1145,30 @@ function switchTab(tab) {
 // Image upload and OCR handling
 let selectedFile = null;
 
-document.getElementById('recipeImageFile').addEventListener('change', function(e) {
+document.getElementById('recipeImageFile').addEventListener('change', async function(e) {
     const file = e.target.files[0];
     if (!file) return;
-    
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-        alert('Please upload a valid image file (JPG, PNG, GIF, or WebP)');
+
+    selectedFile = null;
+    document.getElementById('extractBtn').style.display = 'none';
+
+    // Type and 20 MB limit are checked on the original, before any resizing
+    const validationError = validateScanFile(file);
+    if (validationError) {
+        alert(validationError);
         this.value = '';
         return;
     }
-    
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-        alert('Image is too large! Please use an image smaller than 5 MB.\n\nCurrent size: ' + (file.size / 1024 / 1024).toFixed(2) + ' MB');
+
+    // Downsize to 2000 px (JPEG) in the browser before upload
+    try {
+        selectedFile = await prepareScanFile(file);
+    } catch (error) {
+        alert(error.message);
         this.value = '';
         return;
     }
-    
-    selectedFile = file;
-    
+
     const reader = new FileReader();
     reader.onload = function(e) {
         document.getElementById('previewImg').src = e.target.result;
@@ -1172,7 +1177,7 @@ document.getElementById('recipeImageFile').addEventListener('change', function(e
         document.getElementById('imageInterpretToggle').style.display = 'block';
         document.getElementById('uploadStatus').style.display = 'none';
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(selectedFile);
 });
 
 document.getElementById('extractBtn').addEventListener('click', function() {
