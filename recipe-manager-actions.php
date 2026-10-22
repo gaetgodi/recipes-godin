@@ -28,6 +28,9 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Marker text for the TOC placeholder paragraph - see recipe_export_docx_insert_toc()
+define('RECIPE_EXPORT_TOC_PLACEHOLDER', 'RECIPE_EXPORT_TOC_PLACEHOLDER');
+
 /**
  * Build a query-string fragment carrying the current filter/search state
  * (read from the hidden form fields submitted with the bulk action), for
@@ -462,23 +465,29 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
     );
 
     // --- Table of contents (page 2) ---
-    // Manual, bookmark-based TOC: built from the same ordered post list the
-    // content loop below uses, so entry order always matches page order.
-    // This is a plain heading, not linked to anything itself - it must not
-    // be confused with the addLink() entries beneath it.
-    $section->addPageBreak();
-    $section->addTitle('Table of Contents', 1);
-
+    // A real TOC field (TOC \o "1-1"), which PHPWord cannot write correctly
+    // itself, so a placeholder paragraph goes here and
+    // recipe_export_docx_insert_toc() swaps it for the field after saving.
+    // The heading uses TOCHeading, not Heading 1, so it doesn't list itself.
+    $all_french = true;
+    $toc_entries = array();
     foreach ($recipes_query->posts as $toc_post) {
-        $toc_title = recipe_export_clean_text(get_the_title($toc_post->ID));
-        $section->addLink(
-            'recipe_' . $toc_post->ID,
-            $toc_title,
-            array('name' => $body_font, 'size' => 12, 'color' => '0000FF', 'underline' => 'single'),
-            array('spaceAfter' => 100),
-            true
+        if (strcasecmp((string) get_post_meta($toc_post->ID, '_recipe_original_lang', true), 'French') !== 0) {
+            $all_french = false;
+        }
+        $toc_entries[] = array(
+            'bookmark' => 'recipe_' . $toc_post->ID,
+            'title' => recipe_export_clean_text(get_the_title($toc_post->ID)),
         );
     }
+
+    $section->addPageBreak();
+    $section->addText($all_french ? 'Table des matières' : 'Table of Contents', null, 'TOCHeading');
+    $section->addText(RECIPE_EXPORT_TOC_PLACEHOLDER);
+
+    // Right-aligned page-number tab at the right margin of the actual page
+    $section_style = $section->getStyle();
+    $toc_tab_pos = (int) ($section_style->getPageSizeW() - $section_style->getMarginLeft() - $section_style->getMarginRight());
 
     // --- One recipe per page ---
     while ($recipes_query->have_posts()) {
@@ -540,6 +549,12 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
     $writer = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'Word2007');
     $writer->save($tmp_filename);
 
+    if (!recipe_export_docx_insert_toc($tmp_filename, $toc_entries, $toc_tab_pos)) {
+        @unlink($tmp_filename);
+        echo '<div style="background: #f8d7da; padding: 15px; margin: 20px; border: 1px solid #f5c6cb; color: #721c24;">Word export failed while building the table of contents.</div>';
+        return;
+    }
+
     // page-recipe-manager.php already called get_header() before this file
     // was required, so discard whatever HTML is sitting in the output
     // buffer(s) - the response body must be pure binary docx content.
@@ -562,6 +577,86 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
     @unlink($tmp_filename);
 
     exit;
+}
+
+/**
+ * Post-process a saved PHPWord .docx: replace the placeholder paragraph with
+ * a real TOC field and add the styles it needs.
+ *
+ * The field result is pre-filled with one TOC 1 entry per recipe (hyperlink
+ * to the existing recipe_<ID> bookmark, no page number), so the table is not
+ * empty on open. Page numbers appear when the user updates the index; the
+ * field is not marked dirty and updateFields stays false, to avoid Word's
+ * "update fields?" prompt on every open.
+ *
+ * @param string $filename    Saved .docx path, rewritten in place.
+ * @param array  $entries     array of array('bookmark' => ..., 'title' => ...),
+ *                            title already XML-escaped (recipe_export_clean_text()).
+ * @param int    $tab_pos     Right tab position in twips (text width).
+ * @return bool
+ */
+function recipe_export_docx_insert_toc($filename, $entries, $tab_pos) {
+    $zip = new ZipArchive();
+    if ($zip->open($filename) !== true) {
+        return false;
+    }
+
+    $document = $zip->getFromName('word/document.xml');
+    $styles = $zip->getFromName('word/styles.xml');
+    if ($document === false || $styles === false) {
+        $zip->close();
+        return false;
+    }
+
+    // --- document.xml: placeholder paragraph -> TOC field ---
+    $marker_pos = strpos($document, RECIPE_EXPORT_TOC_PLACEHOLDER);
+    $para_start = $marker_pos === false ? false : strrpos(substr($document, 0, $marker_pos), '<w:p>');
+    $para_end = $marker_pos === false ? false : strpos($document, '</w:p>', $marker_pos);
+    if ($para_start === false || $para_end === false) {
+        $zip->close();
+        return false;
+    }
+
+    $toc_xml = '';
+    foreach ($entries as $i => $entry) {
+        $toc_xml .= '<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr>';
+        if ($i === 0) {
+            $toc_xml .= '<w:r><w:fldChar w:fldCharType="begin"/></w:r>'
+                . '<w:r><w:instrText xml:space="preserve"> TOC \o "1-1" \h \z \u </w:instrText></w:r>'
+                . '<w:r><w:fldChar w:fldCharType="separate"/></w:r>';
+        }
+        $toc_xml .= '<w:hyperlink w:anchor="' . $entry['bookmark'] . '" w:history="1">'
+            . '<w:r><w:t xml:space="preserve">' . $entry['title'] . '</w:t></w:r>'
+            . '</w:hyperlink></w:p>';
+    }
+    $toc_xml .= '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+
+    $document = substr($document, 0, $para_start) . $toc_xml . substr($document, $para_end + strlen('</w:p>'));
+
+    // --- styles.xml: explicit outline level on Heading 1 (look unchanged) ---
+    $styles = preg_replace(
+        '/(<w:style w:type="paragraph" w:styleId="Heading1">(?:(?!<\/w:style>).)*?)(<w:rPr>)/s',
+        '$1<w:pPr><w:outlineLvl w:val="0"/></w:pPr>$2',
+        $styles,
+        1
+    );
+
+    // --- styles.xml: TOC Heading (Heading 1 look, no outline level) and TOC 1 ---
+    $new_styles = '<w:style w:type="paragraph" w:styleId="TOCHeading">'
+        . '<w:name w:val="TOC Heading"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/>'
+        . '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>'
+        . '<w:b w:val="1"/><w:bCs w:val="1"/><w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr>'
+        . '</w:style>'
+        . '<w:style w:type="paragraph" w:styleId="TOC1">'
+        . '<w:name w:val="toc 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="39"/><w:unhideWhenUsed/>'
+        . '<w:pPr><w:tabs><w:tab w:val="right" w:leader="dot" w:pos="' . (int) $tab_pos . '"/></w:tabs><w:spacing w:after="100"/></w:pPr>'
+        . '</w:style>';
+    $styles = str_replace('</w:styles>', $new_styles . '</w:styles>', $styles);
+
+    $ok = $zip->addFromString('word/document.xml', $document)
+        && $zip->addFromString('word/styles.xml', $styles);
+
+    return $zip->close() && $ok;
 }
 
 /**
