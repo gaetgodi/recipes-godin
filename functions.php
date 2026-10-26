@@ -293,6 +293,9 @@ require_once(get_stylesheet_directory() . '/scan-image-functions.php');
 require_once(get_stylesheet_directory() . '/recipe-image-upload-handler.php');
 require_once(get_stylesheet_directory() . '/recipe-model-health-check.php');
 
+// Recipe Manager "Translate selected" AJAX handlers (uses the translator above)
+require_once(get_stylesheet_directory() . '/recipe-bulk-translate.php');
+
 // Load recipe gallery (multi-photo) data-layer functions and AJAX handlers
 require_once(get_stylesheet_directory() . '/recipe-gallery-functions.php');
 require_once(get_stylesheet_directory() . '/recipe-gallery-upload-handler.php');

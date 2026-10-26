@@ -4,8 +4,10 @@
  *
  * Complete recipe management interface with filtering, bulk actions, and printing
  *
- * @version 2.3.0
+ * @version 2.4.0
  * @changelog
+ *   2.4.0 - "🌐 Translate selected" button beside Download as Word (top and bottom),
+ *            opening the bulk translate dialog (recipe-bulk-translate.js / .php).
  *   2.3.0 - UI reorganization: moved Manage Categories / Manage Permissions into
  *            toolbar box with collection selector; filter section is now filters-only
  *            with centered title; Add New Recipe is a prominent standalone CTA above
@@ -593,6 +595,14 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
                 Download as Word
             </button>
 
+            <?php if (current_user_can('edit_posts')): ?>
+            <button type="button" class="action-btn" style="background: #17a2b8; color: white;" id="translateBtnTop" disabled
+                    onclick="openBulkTranslateDialog()"
+                    title="Translate selected recipes, each saved as a new recipe in your collection">
+                🌐 Translate selected
+            </button>
+            <?php endif; ?>
+
             <button type="submit" name="bulk_action" value="check_allergens" class="action-btn" style="background: #c84a31; color: white;" id="checkAllergensBtnTop" disabled
                     title="Check selected recipes against your active allergen profile">
                 🩺 Check Allergens
@@ -717,6 +727,14 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
                 Download as Word
             </button>
 
+            <?php if (current_user_can('edit_posts')): ?>
+            <button type="button" class="action-btn" style="background: #17a2b8; color: white;" id="translateBtn" disabled
+                    onclick="openBulkTranslateDialog()"
+                    title="Translate selected recipes, each saved as a new recipe in your collection">
+                🌐 Translate selected
+            </button>
+            <?php endif; ?>
+
             <button type="submit" name="bulk_action" value="check_allergens" class="action-btn" style="background: #c84a31; color: white;" id="checkAllergensBtn" disabled
                     title="Check selected recipes against your active allergen profile">
                 🩺 Check Allergens
@@ -768,6 +786,16 @@ $viewer_active_allergen_profile = get_active_allergen_profile(get_current_user_i
 
 <!-- Load external JavaScript -->
 <script src="<?php echo get_stylesheet_directory_uri(); ?>/recipe-manager-scripts.js"></script>
+<?php if (current_user_can('edit_posts')): ?>
+<script>
+const RECIPE_BULK_TRANSLATE = <?php echo wp_json_encode(array(
+    'ajaxUrl' => admin_url('admin-ajax.php'),
+    'nonce' => wp_create_nonce('recipe_bulk_translate'),
+    'languages' => get_recipe_language_names(),
+)); ?>;
+</script>
+<script src="<?php echo get_stylesheet_directory_uri(); ?>/recipe-bulk-translate.js"></script>
+<?php endif; ?>
 
 <script>
 function openShareDialog() {

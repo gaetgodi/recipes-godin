@@ -3,8 +3,10 @@
  * Recipe Image Upload and OCR Handler
  * Handles featured image upload and Claude API OCR extraction
  *
- * @version 2.3.0
+ * @version 2.3.1
  * @changelog
+ *   2.3.1 - Translation prompt now says the TITLE must be translated too; the model was
+ *            returning the recipe name untranslated (seen with SOURCE_LANGUAGE: requests).
  *   2.3.0 - Recipes keep the language they were written in. Both extraction prompts (image
  *            and text, strict and interpret) now return LANGUAGE:, SERVINGS: and a real
  *            NOTES: section in the source language and never translate; interpret mode
@@ -519,7 +521,7 @@ function translate_recipe_to_language($title, $ingredients, $method, $target_lan
         'messages' => array(
             array(
                 'role' => 'user',
-                'content' => "Please translate this recipe to $target_language.\n\nIMPORTANT: The section labels SOURCE_LANGUAGE:, TITLE:, SERVINGS:, INGREDIENTS:, METHOD:, and NOTES: (if present) must remain EXACTLY as written in English — do not translate these labels under any circumstances, even though you are translating everything else to $target_language. Only translate the content that follows each label. Translate every section, including SERVINGS and NOTES.\n\n" . $source_instruction . "If the recipe is already in $target_language, return it as-is. Preserve any [inferred] or [unclear] tags exactly as written, in English, do not translate them either.\n\n" . $text_to_translate
+                'content' => "Please translate this recipe to $target_language.\n\nIMPORTANT: The section labels SOURCE_LANGUAGE:, TITLE:, SERVINGS:, INGREDIENTS:, METHOD:, and NOTES: (if present) must remain EXACTLY as written in English — do not translate these labels under any circumstances, even though you are translating everything else to $target_language. Only translate the content that follows each label. Translate every section, including the TITLE, SERVINGS and NOTES. The recipe name after TITLE: must be translated into $target_language like everything else, even when it is a short dish name (keep only brand names as written).\n\n" . $source_instruction . "If the recipe is already in $target_language, return it as-is. Preserve any [inferred] or [unclear] tags exactly as written, in English, do not translate them either.\n\n" . $text_to_translate
             )
         )
     );

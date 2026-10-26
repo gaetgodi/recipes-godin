@@ -113,6 +113,36 @@ function format_recipe_notes_html($notes) {
 }
 
 /**
+ * Convert stored recipe HTML (_recipe_ingredients/_recipe_method/_recipe_notes) back
+ * to plain text, one item per line, as the recipe editor's textareas show it. Shared
+ * by the editor and the bulk translator (recipe-bulk-translate.php), so a bulk
+ * translation starts from exactly the text the editor would send.
+ */
+function html_to_plain_text($html, $is_method = false) {
+    if (empty($html)) return '';
+    
+    $html = html_entity_decode($html, ENT_QUOTES, 'UTF-8');
+    $html = html_entity_decode($html, ENT_QUOTES, 'UTF-8');
+    
+    $html = preg_replace('/<\/(p|div|h[1-6])>/i', "\n\n", $html);
+    $html = preg_replace('/<\/(li)>/i', "\n", $html);
+    $html = preg_replace('/<br\s*\/?>/i', "\n", $html);
+    
+    $html = strip_tags($html);
+    
+    if ($is_method) {
+        $html = preg_replace('/\.(?!\d)/', ".\n", $html);
+                    $html = preg_replace('/(\d)\.\n(\d)/', '$1.$2', $html);
+    }
+    
+    $lines = explode("\n", $html);
+    $lines = array_map('trim', $lines);
+    $lines = array_filter($lines, function($line) { return $line !== ''; });
+    
+    return implode("\n", $lines);
+}
+
+/**
  * Get all categories for a specific user
  */
 function get_user_categories($user_id, $orderby = 'cat_name', $order = 'ASC') {

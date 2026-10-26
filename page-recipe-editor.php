@@ -114,30 +114,6 @@ if ($is_editing) {
     $recipe_notes = get_post_meta($recipe_id, '_recipe_notes', true);
     $recipe_servings = get_post_meta($recipe_id, '_recipe_servings', true);
     
-    function html_to_plain_text($html, $is_method = false) {
-        if (empty($html)) return '';
-        
-        $html = html_entity_decode($html, ENT_QUOTES, 'UTF-8');
-        $html = html_entity_decode($html, ENT_QUOTES, 'UTF-8');
-        
-        $html = preg_replace('/<\/(p|div|h[1-6])>/i', "\n\n", $html);
-        $html = preg_replace('/<\/(li)>/i', "\n", $html);
-        $html = preg_replace('/<br\s*\/?>/i', "\n", $html);
-        
-        $html = strip_tags($html);
-        
-        if ($is_method) {
-            $html = preg_replace('/\.(?!\d)/', ".\n", $html);
-                        $html = preg_replace('/(\d)\.\n(\d)/', '$1.$2', $html);
-        }
-        
-        $lines = explode("\n", $html);
-        $lines = array_map('trim', $lines);
-        $lines = array_filter($lines, function($line) { return $line !== ''; });
-        
-        return implode("\n", $lines);
-    }
-    
     $recipe_ingredients = html_to_plain_text($recipe_ingredients, false);
     $recipe_method = html_to_plain_text($recipe_method, true);
     $recipe_notes = html_to_plain_text($recipe_notes, false);
