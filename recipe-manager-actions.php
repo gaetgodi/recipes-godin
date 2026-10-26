@@ -481,6 +481,35 @@ function recipe_manager_export_docx($recipe_ids, $requesting_user_id) {
         );
     }
 
+    // --- Instructions page (page 2, before the TOC) ---
+    // NoteHeading has the TOCHeading look but no outline level, so the TOC
+    // field never lists it. NoteBox paragraphs share identical borders, so
+    // Word and LibreOffice draw them as one box. Both styles are added by
+    // recipe_export_docx_insert_toc(). Plain "1." prefixes, no list numbering.
+    if ($all_french) {
+        $note_heading = 'Avant de commencer';
+        $note_lines = array(
+            "1. Si le fichier s'ouvre en lecture seule ou en mode protégé : faites un clic droit sur le fichier enregistré, choisissez Propriétés et cochez Débloquer; ou, dans Word, cliquez sur Activer la modification.",
+            '2. Pour conserver vos modifications, enregistrez le fichier sous un autre nom : Fichier > Enregistrer sous.',
+            '3. Pour mettre à jour la table des matières avec les numéros de page : dans Word, faites un clic droit sur la table et choisissez Mettre à jour le champ > Mettre à jour toute la table (ou sélectionnez-la et appuyez sur F9). Dans LibreOffice Writer, choisissez Outils > Mettre à jour > Tous les index et tables.',
+            "Vous pouvez supprimer cette page après l'avoir lue.",
+        );
+    } else {
+        $note_heading = 'Before you start';
+        $note_lines = array(
+            '1. If the file opens read-only or in Protected View: right-click the saved file, choose Properties and tick Unblock; or, in Word, click Enable Editing.',
+            '2. To keep your changes, save the file under another name: File > Save As.',
+            '3. To update the table of contents with page numbers: in Word, right-click the table and choose Update Field > Update entire table (or select it and press F9). In LibreOffice Writer, choose Tools > Update > All Indexes and Tables.',
+            'You can delete this page once you have read it.',
+        );
+    }
+
+    $section->addPageBreak();
+    $section->addText(recipe_export_clean_text($note_heading), null, 'NoteHeading');
+    foreach ($note_lines as $note_line) {
+        $section->addText(recipe_export_clean_text($note_line), null, 'NoteBox');
+    }
+
     $section->addPageBreak();
     $section->addText($all_french ? 'Table des matières' : 'Table of Contents', null, 'TOCHeading');
     $section->addText(RECIPE_EXPORT_TOC_PLACEHOLDER);
@@ -633,19 +662,57 @@ function recipe_export_docx_insert_toc($filename, $entries, $tab_pos) {
 
     $document = substr($document, 0, $para_start) . $toc_xml . substr($document, $para_end + strlen('</w:p>'));
 
-    // --- styles.xml: explicit outline level on Heading 1 (look unchanged) ---
+    // --- styles.xml: explicit paragraph defaults (single line, no space) ---
+    // PHPWord writes no pPrDefault, so Word/LibreOffice fell back to their own
+    // spacing and the recipe lines came out looking double spaced.
+    $default_spacing = '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>';
+    if (strpos($styles, '<w:pPrDefault>') !== false) {
+        if (preg_match('/<w:pPrDefault>\s*<w:pPr>(?:(?!<\/w:pPr>).)*?<w:spacing\b[^>]*\/>/s', $styles)) {
+            $styles = preg_replace('/(<w:pPrDefault>\s*<w:pPr>(?:(?!<\/w:pPr>).)*?)<w:spacing\b[^>]*\/>/s', '$1' . $default_spacing, $styles, 1);
+        } elseif (strpos($styles, '<w:pPrDefault><w:pPr/>') !== false) {
+            $styles = str_replace('<w:pPrDefault><w:pPr/>', '<w:pPrDefault><w:pPr>' . $default_spacing . '</w:pPr>', $styles);
+        } else {
+            $styles = preg_replace('/<w:pPrDefault>\s*<w:pPr>/', '$0' . $default_spacing, $styles, 1);
+        }
+    } elseif (strpos($styles, '</w:docDefaults>') !== false) {
+        $styles = str_replace('</w:docDefaults>', '<w:pPrDefault><w:pPr>' . $default_spacing . '</w:pPr></w:pPrDefault></w:docDefaults>', $styles);
+    } else {
+        $styles = preg_replace('/<w:styles\b[^>]*>/', '$0<w:docDefaults><w:pPrDefault><w:pPr>' . $default_spacing . '</w:pPr></w:pPrDefault></w:docDefaults>', $styles, 1);
+    }
+
+    // --- styles.xml: explicit outline level and spacing on Heading 1, spacing on Heading 2 ---
     $styles = preg_replace(
         '/(<w:style w:type="paragraph" w:styleId="Heading1">(?:(?!<\/w:style>).)*?)(<w:rPr>)/s',
-        '$1<w:pPr><w:outlineLvl w:val="0"/></w:pPr>$2',
+        '$1<w:pPr><w:spacing w:before="0" w:after="200"/><w:outlineLvl w:val="0"/></w:pPr>$2',
+        $styles,
+        1
+    );
+    $styles = preg_replace(
+        '/(<w:style w:type="paragraph" w:styleId="Heading2">(?:(?!<\/w:style>).)*?)(<w:rPr>)/s',
+        '$1<w:pPr><w:spacing w:before="200" w:after="100"/></w:pPr>$2',
         $styles,
         1
     );
 
-    // --- styles.xml: TOC Heading (Heading 1 look, no outline level) and TOC 1 ---
+    // --- styles.xml: TOC Heading and Note Heading (Heading 1 look, no outline
+    // level), TOC 1, and Note Box (instructions page, one bordered block) ---
+    $heading_rpr = '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>'
+        . '<w:b w:val="1"/><w:bCs w:val="1"/><w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr>';
+    $box_border = 'w:val="single" w:sz="4" w:space="4" w:color="auto"';
     $new_styles = '<w:style w:type="paragraph" w:styleId="TOCHeading">'
         . '<w:name w:val="TOC Heading"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/>'
-        . '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>'
-        . '<w:b w:val="1"/><w:bCs w:val="1"/><w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr>'
+        . '<w:pPr><w:spacing w:before="0" w:after="200"/></w:pPr>'
+        . $heading_rpr
+        . '</w:style>'
+        . '<w:style w:type="paragraph" w:styleId="NoteHeading">'
+        . '<w:name w:val="Note Heading"/><w:basedOn w:val="Normal"/><w:next w:val="NoteBox"/>'
+        . '<w:pPr><w:spacing w:before="0" w:after="200"/></w:pPr>'
+        . $heading_rpr
+        . '</w:style>'
+        . '<w:style w:type="paragraph" w:styleId="NoteBox">'
+        . '<w:name w:val="Note Box"/><w:basedOn w:val="Normal"/>'
+        . '<w:pPr><w:pBdr><w:top ' . $box_border . '/><w:left ' . $box_border . '/><w:bottom ' . $box_border . '/><w:right ' . $box_border . '/></w:pBdr>'
+        . '<w:spacing w:after="100"/><w:ind w:left="144" w:right="144"/></w:pPr>'
         . '</w:style>'
         . '<w:style w:type="paragraph" w:styleId="TOC1">'
         . '<w:name w:val="toc 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="39"/><w:unhideWhenUsed/>'
